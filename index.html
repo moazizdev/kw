@@ -75,10 +75,10 @@
 
     function displayAveragePerDay(data) {
         let tableHtml = "<table><thead><tr><th>#</th><th>Date & Time</th><th>Reading</th><th>Time Diff (hrs)</th><th>Avg. per Day (kWh)</th></tr></thead><tbody>";
-        for (let i = 0; i < Math.min(10, data.length - 1); i++) {
-            const row = data[i];
-            const nextRow = data[i + 1];
-
+            for (let i = data.length - 11; i < data.length - 1; i++) {
+                const row = data[i];
+                const nextRow = data[i + 1];
+            
             if (nextRow) {
             const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60); // in hours
             const daysDiff = hoursDiff / 24;
