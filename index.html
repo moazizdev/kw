@@ -105,16 +105,16 @@
           .sort((a, b) => a.timestamp - b.timestamp);
 
         // Filter for last month's data
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastMonthData = data.filter(row => row.timestamp >= lastMonth);
+        const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const last30DaysData = data.filter(row => row.timestamp >= last30Days);
 
-        if (lastMonthData.length < 2) {
+        if (last30DaysData.length < 2) {
           log("> Not enough data for last month.");
           return;
         }
 
-        const first = lastMonthData[0];
-        const last = lastMonthData[lastMonthData.length - 1];
+        const first = last30DaysData[0];
+        const last = last30DaysData[last30DaysData.length - 1];
 
         const totalUsage = last.reading - first.reading;
         if (totalUsage <= 0) {
