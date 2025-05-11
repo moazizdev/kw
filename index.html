@@ -34,6 +34,11 @@
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJUb4YPJoURYx0PodrANsKqu42k61PsGV2F4KsqMNWKAkKHwuszAGHyFH92d0WIu3LKt6rtb7jsKV-/pub?output=csv";
     const now = new Date();
 
+    // Function to detect if the request is from curl (no user agent or terminal)
+    function isCurlRequest() {
+      return !navigator.userAgent || navigator.userAgent.includes('curl');
+    }
+
     function calculateCost(kWh) {
         let cost = 0;
         let tiers = [
@@ -61,7 +66,6 @@
         return cost * 0.01; // Convert cents to EGP
     }
 
-
     function getCategory(kWh) {
       if (kWh <= 50) return "الشريحة الأولي";
       if (kWh <= 100) return "الشريحة الثانية";
@@ -78,27 +82,37 @@
 
     function displayAveragePerDay(data) {
         let tableHtml = "<table><thead><tr><th>#</th><th>Date & Time</th><th>Reading</th><th>Time Diff (hrs)</th><th>Avg. per Day (kWh)</th></tr></thead><tbody>";
-            for (let i = data.length - 11; i < data.length - 1; i++) {
-                const row = data[i];
-                const nextRow = data[i + 1];
-            
+        let terminalOutput = "> Average Usage Per Day\n---------------------------\n";
+        for (let i = data.length - 11; i < data.length - 1; i++) {
+            const row = data[i];
+            const nextRow = data[i + 1];
+        
             if (nextRow) {
-            const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60); // in hours
-            const daysDiff = hoursDiff / 24;
-            const kWhUsage = nextRow.reading - row.reading;
-            const avgPerDay = kWhUsage / daysDiff;
+                const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60); // in hours
+                const daysDiff = hoursDiff / 24;
+                const kWhUsage = nextRow.reading - row.reading;
+                const avgPerDay = kWhUsage / daysDiff;
 
-            tableHtml += `<tr>
-                <td>${i + 1}</td>
-                <td>${row.timestamp.toLocaleString('en-US')}</td>
-                <td>${row.reading}</td>
-                <td>${hoursDiff.toFixed(1)}</td>
-                <td>${avgPerDay.toFixed(2)}</td>
-            </tr>`;
+                if (isCurlRequest()) {
+                    terminalOutput += `#${i + 1} Date: ${row.timestamp.toLocaleString('en-US')} Reading: ${row.reading} Avg. per Day: ${avgPerDay.toFixed(2)} kWh\n`;
+                } else {
+                    tableHtml += `<tr>
+                        <td>${i + 1}</td>
+                        <td>${row.timestamp.toLocaleString('en-US')}</td>
+                        <td>${row.reading}</td>
+                        <td>${hoursDiff.toFixed(1)}</td>
+                        <td>${avgPerDay.toFixed(2)}</td>
+                    </tr>`;
+                }
             }
         }
-        tableHtml += "</tbody></table>";
-        document.getElementById("terminal").innerHTML += tableHtml;
+
+        if (isCurlRequest()) {
+            log(terminalOutput);
+        } else {
+            tableHtml += "</tbody></table>";
+            document.getElementById("terminal").innerHTML += tableHtml;
+        }
     }
 
     fetch(csvUrl)
