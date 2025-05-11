@@ -34,27 +34,28 @@
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJUb4YPJoURYx0PodrANsKqu42k61PsGV2F4KsqMNWKAkKHwuszAGHyFH92d0WIu3LKt6rtb7jsKV-/pub?output=csv";
     const now = new Date();
 
-    // Updated price tiers based on your provided list
-    const priceTiers = [
-      { max: 50, price: 68 },      // الشريحة الأولي
-      { max: 100, price: 78 },     // الشريحة الثانية
-      { max: 200, price: 95 },     // الشريحة الثالثة
-      { max: 350, price: 155 },    // الشريحة الرابعة
-      { max: 650, price: 195 },    // الشريحة الخامسة
-      { max: 1000, price: 210 },   // الشريحة السادسة
-      { max: Infinity, price: 210 } // Beyond 1000
-    ];
-
     function calculateCost(kWh) {
         let cost = 0;
-        let previousMax = 0;
+        let tiers = [
+            { from: 0, to: 50, price: 68 },
+            { from: 51, to: 100, price: 78 },
+            { from: 101, to: 200, price: 95 },
+            { from: 201, to: 350, price: 155 },
+            { from: 351, to: 650, price: 195 },
+            { from: 651, to: 1000, price: 210 }
+        ];
 
-        for (const tier of priceTiers) {
-            if (kWh <= previousMax) break;
+        for (const tier of tiers) {
+            if (kWh <= 0) break;
 
-            const usageInTier = Math.min(kWh, tier.max) - previousMax;
-            cost += usageInTier * tier.price;
-            previousMax = tier.max;
+            const rangeStart = tier.from;
+            const rangeEnd = tier.to;
+            const unitsInTier = Math.min(kWh, rangeEnd - rangeStart + 1);
+
+            if (unitsInTier > 0) {
+            cost += unitsInTier * tier.price;
+            kWh -= unitsInTier;
+            }
         }
 
         return cost;
