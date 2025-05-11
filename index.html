@@ -82,11 +82,11 @@
 
     function displayAveragePerDay(data) {
         let tableHtml = "<table><thead><tr><th>#</th><th>Date & Time</th><th>Reading</th><th>Time Diff (hrs)</th><th>Avg. per Day (kWh)</th></tr></thead><tbody>";
-        let terminalOutput = "> Average Usage Per Day\n---------------------------\n";
+        let terminalOutput = "> Average Usage Per Day\n---------------------------\n"; // Terminal-style output
         for (let i = data.length - 11; i < data.length - 1; i++) {
             const row = data[i];
             const nextRow = data[i + 1];
-        
+
             if (nextRow) {
                 const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60); // in hours
                 const daysDiff = hoursDiff / 24;
@@ -94,8 +94,10 @@
                 const avgPerDay = kWhUsage / daysDiff;
 
                 if (isCurlRequest()) {
+                    // Append terminal-style output when curl is detected
                     terminalOutput += `#${i + 1} Date: ${row.timestamp.toLocaleString('en-US')} Reading: ${row.reading} Avg. per Day: ${avgPerDay.toFixed(2)} kWh\n`;
                 } else {
+                    // HTML table output for browsers
                     tableHtml += `<tr>
                         <td>${i + 1}</td>
                         <td>${row.timestamp.toLocaleString('en-US')}</td>
@@ -108,12 +110,13 @@
         }
 
         if (isCurlRequest()) {
-            log(terminalOutput);
+            log(terminalOutput);  // Show terminal-like output if curl is used
         } else {
             tableHtml += "</tbody></table>";
-            document.getElementById("terminal").innerHTML += tableHtml;
+            document.getElementById("terminal").innerHTML += tableHtml;  // Show table in browser
         }
     }
+
 
     fetch(csvUrl)
       .then(response => response.text())
