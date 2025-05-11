@@ -46,18 +46,20 @@
     ];
 
     function calculateCost(kWh) {
-      let cost = 0;
-      let remaining = kWh;
-      
-      for (const tier of priceTiers) {
-        if (remaining <= 0) break;
-        const usageInTier = Math.min(remaining, tier.max) - (tier.max - (remaining > tier.max ? tier.max : 0));
-        cost += usageInTier * tier.price;
-        remaining -= usageInTier;
-      }
+        let cost = 0;
+        let previousMax = 0;
 
-      return cost > 0 ? cost : 0; // Ensure cost is not negative
+        for (const tier of priceTiers) {
+            if (kWh <= previousMax) break;
+
+            const usageInTier = Math.min(kWh, tier.max) - previousMax;
+            cost += usageInTier * tier.price;
+            previousMax = tier.max;
+        }
+
+        return cost;
     }
+
 
     function getCategory(kWh) {
       if (kWh <= 50) return "الشريحة الأولي";
