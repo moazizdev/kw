@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Electricity Usage Summary</title>
+  <style>
+    body {
+      background: black;
+      color: #00ff00;
+      font-family: monospace;
+      padding: 20px;
+      white-space: pre-wrap;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border: 1px solid #00ff00;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 8px;
+      text-align: center;
+      border: 1px solid #00ff00;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal">> Loading electricity usage data...</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJUb4YPJoURYx0PodrANsKqu42k61PsGV2F4KsqMNWKAkKHwuszAGHyFH92d0WIu3LKt6rtb7jsKV-/pub?output=csv";
+    const now = new Date();
+
+    // Updated price tiers based on your provided list
+    const priceTiers = [
+      { max: 50, price: 68 },      // الشريحة الأولي
+      { max: 100, price: 78 },     // الشريحة الثانية
+      { max: 200, price: 95 },     // الشريحة الثالثة
+      { max: 350, price: 155 },    // الشريحة الرابعة
+      { max: 650, price: 195 },    // الشريحة الخامسة
+      { max: 1000, price: 210 },   // الشريحة السادسة
+      { max: Infinity, price: 210 } // Beyond 1000
+    ];
+
+    function calculateCost(kWh) {
+      let cost = 0;
+      let remaining = kWh;
+      
+      for (const tier of priceTiers) {
+        if (remaining <= 0) break;
+        const usageInTier = Math.min(remaining, tier.max) - (tier.max - (remaining > tier.max ? tier.max : 0));
+        cost += usageInTier * tier.price;
+        remaining -= usageInTier;
+      }
+
+      return cost > 0 ? cost : 0; // Ensure cost is not negative
+    }
+
+    function getCategory(kWh) {
+      if (kWh <= 50) return "الشريحة الأولي";
+      if (kWh <= 100) return "الشريحة الثانية";
+      if (kWh <= 200) return "الشريحة الثالثة";
+      if (kWh <= 350) return "الشريحة الرابعة";
+      if (kWh <= 650) return "الشريحة الخامسة";
+      if (kWh <= 1000) return "الشريحة السادسة";
+      return "الشريحة السابعة";
+    }
+
+    function log(line) {
+      document.getElementById("terminal").textContent += "\n" + line;
+    }
+
+    function displayAveragePerDay(data) {
+      let tableHtml = "<table><thead><tr><th>#</th><th>Date</th><th>Reading</th><th>Avg. per Day (kWh)</th></tr></thead><tbody>";
+      for (let i = 0; i < Math.min(10, data.length - 1); i++) {
+        const row = data[i];
+        const nextRow = data[i + 1];
+
+        if (nextRow) {
+          const timeDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60); // time difference in hours
+          const daysDiff = timeDiff / 24; // convert hours to days
+          const kWhUsage = nextRow.reading - row.reading;
+          const avgPerDay = kWhUsage / daysDiff; // average kWh per day
+          
+          tableHtml += `<tr><td>${i + 1}</td><td>${row.timestamp.toLocaleDateString()}</td><td>${row.reading}</td><td>${avgPerDay.toFixed(2)}</td></tr>`;
+        }
+      }
+      tableHtml += "</tbody></table>";
+      document.getElementById("terminal").innerHTML += tableHtml;
+    }
+
+    fetch(csvUrl)
+      .then(response => response.text())
+      .then(csvText => {
+        const parsed = Papa.parse(csvText, { header: true });
+        const data = parsed.data
+          .filter(row => row["date time"]?.trim() && row["reading"]?.trim())
+          .map(row => ({
+            timestamp: new Date(row["date time"].trim()),
+            reading: parseInt(row["reading"].trim())
+          }))
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+        // Filter for last month's data
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthData = data.filter(row => row.timestamp >= lastMonth);
+
+        if (lastMonthData.length < 2) {
+          log("> Not enough data for last month.");
+          return;
+        }
+
+        const first = lastMonthData[0];
+        const last = lastMonthData[lastMonthData.length - 1];
+
+        const totalUsage = last.reading - first.reading;
+        if (totalUsage <= 0) {
+          log("> Invalid total usage data.");
+          return;
+        }
+
+        const timeDiff = (last.timestamp - first.timestamp) / (1000 * 60 * 60); // time difference in hours
+        const daysDiff = timeDiff / 24; // convert hours to days
+        const avgPerDay = totalUsage / daysDiff;
+        const cost = calculateCost(totalUsage);
+        const category = getCategory(totalUsage);
+
+        log("> Electricity Usage Summary for Last Month");
+        log("----------------------------------------");
+        log(`📅 First Reading: ${first.timestamp.toLocaleDateString()}`);
+        log(`📅 Last Reading:  ${last.timestamp.toLocaleDateString()}`);
+        log(`⚡ Total Usage: ${totalUsage} kWh`);
+        log(`📊 Average per day: ${avgPerDay.toFixed(2)} kWh/day`);
+        log(`💰 Estimated Cost: ${cost.toFixed(2)} EGP`);
+        log(`📈 Billing Category: ${category}`);
+
+        displayAveragePerDay(data);
+      })
+      .catch(error => log("> ❌ Failed to fetch or process CSV: " + error.message));
+  </script>
+</body>
+</html>
