@@ -56,14 +56,17 @@
 <!-- Arabic content -->
 <div id="content-ar" class="lang-ar">
   <div id="terminal-ar">&gt; جاري تحميل بيانات استهلاك الكهرباء...</div>
+  <canvas id="cost-chart-ar" style="margin-top: 40px;"></canvas>
 </div>
 
 <!-- English content -->
 <div id="content-en" class="lang-en">
   <div id="terminal-en">&gt; Loading electricity usage data...</div>
+  <canvas id="cost-chart-en" style="margin-top: 40px;"></canvas>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJUb4YPJoURYx0PodrANsKqu42k61PsGV2F4KsqMNWKAkKHwuszAGHyFH92d0WIu3LKt6rtb7jsKV-/pub?output=csv";
 
@@ -245,6 +248,20 @@
         logAr(`📈 فئة الفاتورة: ${category}`);
 
         displayAveragePerDayAr(data);
+
+        // For Arabic
+        const chartLabelsAr = [];
+        const chartDataAr = [];
+        for (let i = 0; i < last30DaysData.length - 1; i++) {
+          const d1 = last30DaysData[i];
+          const d2 = last30DaysData[i + 1];
+          const usage = d2.reading - d1.reading;
+          if (usage > 0) {
+            chartLabelsAr.push(d2.timestamp.toLocaleDateString('ar-EG'));
+            chartDataAr.push(calculateCost(usage));
+          }
+        }
+        renderChartAr(chartLabelsAr, chartDataAr);
       })
       .catch(error => logAr("> ❌ حدث خطأ في تحميل أو معالجة البيانات: " + error.message));
   }
@@ -298,8 +315,88 @@
         logEn(`📈 Billing Category: ${category}`);
 
         displayAveragePerDayEn(data);
+
+        // For English
+        const chartLabelsEn = [];
+        const chartDataEn = [];
+        for (let i = 0; i < last30DaysData.length - 1; i++) {
+          const d1 = last30DaysData[i];
+          const d2 = last30DaysData[i + 1];
+          const usage = d2.reading - d1.reading;
+          if (usage > 0) {
+            chartLabelsEn.push(d2.timestamp.toLocaleDateString('en-US'));
+            chartDataEn.push(calculateCost(usage));
+          }
+        }
+        renderChartEn(chartLabelsEn, chartDataEn);
       })
       .catch(error => logEn("> ❌ Failed to fetch or process CSV: " + error.message));
+  }
+
+  function renderChartAr(labels, data) {
+  const ctx = document.getElementById('cost-chart-ar').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'التكلفة المقدرة (جنيه)',
+        data: data,
+        borderColor: '#00ff00',
+        backgroundColor: 'rgba(0, 255, 0, 0.1)',
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: { color: '#00ff00' }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#00ff00' }
+        },
+        y: {
+          ticks: { color: '#00ff00' }
+        }
+      }
+    }
+  });
+}
+
+  function renderChartEn(labels, data) {
+    const ctx = document.getElementById('cost-chart-en').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Estimated Cost (EGP)',
+          data: data,
+          borderColor: '#00ff00',
+          backgroundColor: 'rgba(0, 255, 0, 0.1)',
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: { color: '#00ff00' }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#00ff00' }
+          },
+          y: {
+            ticks: { color: '#00ff00' }
+          }
+        }
+      }
+    });
   }
 
   // Language switch button logic
