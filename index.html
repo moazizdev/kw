@@ -238,6 +238,8 @@
         const cost = calculateCost(totalUsage);
         const category = getCategoryAr(totalUsage);
         // Output latest result
+        const rollingCosts = [];
+        const labels = [];
         const lastCost = rollingCosts[rollingCosts.length - 1];
         const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
 
@@ -254,8 +256,7 @@
 
         displayAveragePerDayAr(data);
 
-        const rollingCosts = [];
-        const labels = [];
+
 
         for (let i = 30; i < data.length; i++) {
           const start = data[i - 30];
@@ -321,6 +322,8 @@
         const cost = calculateCost(totalUsage);
         const category = getCategoryEn(totalUsage);
         // Output latest result
+        const rollingCosts = [];
+        const labels = [];
         const lastCost = rollingCosts[rollingCosts.length - 1];
         const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
 
@@ -337,8 +340,6 @@
 
         displayAveragePerDayEn(data);
 
-        const rollingCosts = [];
-        const labels = [];
 
         for (let i = 30; i < data.length; i++) {
           const start = data[i - 30];
