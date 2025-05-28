@@ -237,14 +237,19 @@
         const avgPerDay = totalUsage / daysDiff;
         const cost = calculateCost(totalUsage);
         const category = getCategoryAr(totalUsage);
+        // Output latest result
+        const lastCost = rollingCosts[rollingCosts.length - 1];
+        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
 
         logAr("> ملخص استهلاك الكهرباء للشهر الماضي");
         logAr("----------------------------------------");
         logAr(`📅 أول قراءة: ${first.timestamp.toLocaleDateString('ar-EG')}`);
         logAr(`📅 آخر قراءة:  ${last.timestamp.toLocaleDateString('ar-EG')}`);
-        logAr(`⚡ إجمالي الاستهلاك: ${totalUsage} كيلوواط/ساعة`);
+        logAr(`📊 إجمالي الاستهلاك: ${totalUsage} كيلوواط/ساعة`);
         logAr(`📊 المتوسط اليومي: ${avgPerDay.toFixed(2)} كيلوواط/يوم`);
         logAr(`💰 التكلفة المقدرة: ${cost.toFixed(2)} جنيه`);
+        logEn(`💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه`);
+        logEn(`🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم`);
         logAr(`📈 فئة الفاتورة: ${category}`);
 
         displayAveragePerDayAr(data);
@@ -267,15 +272,6 @@
           rollingCosts.push(parseFloat(estimatedCost.toFixed(2)));
           labels.push(end.timestamp.toLocaleDateString('ar-EG'));
         }
-        // Output latest result
-        const lastCost = rollingCosts[rollingCosts.length - 1];
-        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
-
-        const output = `
-    🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم
-    💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه
-        `;
-        document.getElementById('terminal-ar').innerText = output;
 
         // Draw chart
         const canvas = document.getElementById('costChartAr');
@@ -324,18 +320,23 @@
         const avgPerDay = totalUsage / daysDiff;
         const cost = calculateCost(totalUsage);
         const category = getCategoryEn(totalUsage);
+        // Output latest result
+        const lastCost = rollingCosts[rollingCosts.length - 1];
+        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
 
         logEn("> Electricity Usage Summary for Last Month");
         logEn("----------------------------------------");
         logEn(`📅 First Reading: ${first.timestamp.toLocaleDateString('en-US')}`);
         logEn(`📅 Last Reading:  ${last.timestamp.toLocaleDateString('en-US')}`);
-        logEn(`⚡ Total Usage: ${totalUsage} kWh`);
+        logEn(`📊 Total Usage: ${totalUsage} kWh`);
         logEn(`📊 Average per day: ${avgPerDay.toFixed(2)} kWh/day`);
         logEn(`💰 Estimated Cost: ${cost.toFixed(2)} EGP`);
         logEn(`📈 Billing Category: ${category}`);
+        logEn(`🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم`);
+        logEn(`💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه`);
 
         displayAveragePerDayEn(data);
-        
+
         const rollingCosts = [];
         const labels = [];
 
@@ -354,16 +355,6 @@
           rollingCosts.push(parseFloat(estimatedCost.toFixed(2)));
           labels.push(end.timestamp.toLocaleDateString('ar-EG'));
         }
-
-        // Output latest result
-        const lastCost = rollingCosts[rollingCosts.length - 1];
-        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
-
-        const output = `
-    🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم
-    💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه
-        `;
-        document.getElementById('terminal-ar').innerText = output;
 
         // Draw chart
         const canvas = document.getElementById('costChartAr');
