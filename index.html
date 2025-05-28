@@ -56,13 +56,13 @@
 <!-- Arabic content -->
 <div id="content-ar" class="lang-ar">
   <div id="terminal-ar">&gt; جاري تحميل بيانات استهلاك الكهرباء...</div>
-  <canvas id="cost-chart-ar" style="margin-top: 40px;"></canvas>
+  <canvas id="costChartAr" width="400" height="200" style="margin-top: 30px;"></canvas>
 </div>
 
 <!-- English content -->
 <div id="content-en" class="lang-en">
   <div id="terminal-en">&gt; Loading electricity usage data...</div>
-  <canvas id="cost-chart-en" style="margin-top: 40px;"></canvas>
+  <canvas id="costChartEn" width="400" height="200" style="margin-top: 30px;"></canvas>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -249,19 +249,23 @@
 
         displayAveragePerDayAr(data);
 
-        // For Arabic
-        const chartLabelsAr = [];
-        const chartDataAr = [];
-        for (let i = 0; i < last30DaysData.length - 1; i++) {
-          const d1 = last30DaysData[i];
-          const d2 = last30DaysData[i + 1];
-          const usage = d2.reading - d1.reading;
-          if (usage > 0) {
-            chartLabelsAr.push(d2.timestamp.toLocaleDateString('ar-EG'));
-            chartDataAr.push(calculateCost(usage));
-          }
+        const dailyCosts = [];
+        const dailyLabels = [];
+
+        for (let i = 1; i < last30DaysData.length; i++) {
+          const prev = last30DaysData[i - 1];
+          const curr = last30DaysData[i];
+
+          const usage = curr.reading - prev.reading;
+          const cost = calculateCost(usage);
+          dailyCosts.push(parseFloat(cost.toFixed(2)));
+
+          const label = curr.timestamp.toLocaleDateString(currentLang === 'ar' ? 'ar-EG' : 'en-US');
+          dailyLabels.push(label);
         }
-        renderChartAr(chartLabelsAr, chartDataAr);
+
+        const canvas = document.getElementById(currentLang === 'ar' ? 'costChartAr' : 'costChartEn');
+        renderChart(canvas.getContext('2d'), dailyLabels, dailyCosts, currentLang === 'ar');
       })
       .catch(error => logAr("> ❌ حدث خطأ في تحميل أو معالجة البيانات: " + error.message));
   }
@@ -316,83 +320,63 @@
 
         displayAveragePerDayEn(data);
 
-        // For English
-        const chartLabelsEn = [];
-        const chartDataEn = [];
-        for (let i = 0; i < last30DaysData.length - 1; i++) {
-          const d1 = last30DaysData[i];
-          const d2 = last30DaysData[i + 1];
-          const usage = d2.reading - d1.reading;
-          if (usage > 0) {
-            chartLabelsEn.push(d2.timestamp.toLocaleDateString('en-US'));
-            chartDataEn.push(calculateCost(usage));
-          }
+        const dailyCosts = [];
+        const dailyLabels = [];
+
+        for (let i = 1; i < last30DaysData.length; i++) {
+          const prev = last30DaysData[i - 1];
+          const curr = last30DaysData[i];
+
+          const usage = curr.reading - prev.reading;
+          const cost = calculateCost(usage);
+          dailyCosts.push(parseFloat(cost.toFixed(2)));
+
+          const label = curr.timestamp.toLocaleDateString(currentLang === 'ar' ? 'ar-EG' : 'en-US');
+          dailyLabels.push(label);
         }
-        renderChartEn(chartLabelsEn, chartDataEn);
+
+        const canvas = document.getElementById(currentLang === 'ar' ? 'costChartAr' : 'costChartEn');
+        renderChart(canvas.getContext('2d'), dailyLabels, dailyCosts, currentLang === 'ar');
       })
       .catch(error => logEn("> ❌ Failed to fetch or process CSV: " + error.message));
   }
 
-  function renderChartAr(labels, data) {
-  const ctx = document.getElementById('cost-chart-ar').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'التكلفة المقدرة (جنيه)',
-        data: data,
-        borderColor: '#00ff00',
-        backgroundColor: 'rgba(0, 255, 0, 0.1)',
-        tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: {
-          labels: { color: '#00ff00' }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#00ff00' }
-        },
-        y: {
-          ticks: { color: '#00ff00' }
-        }
-      }
-    }
-  });
-}
-
-  function renderChartEn(labels, data) {
-    const ctx = document.getElementById('cost-chart-en').getContext('2d');
+  function renderChart(ctx, labels, data, isArabic = false) {
     new Chart(ctx, {
       type: 'line',
       data: {
-        labels: labels,
+        labels,
         datasets: [{
-          label: 'Estimated Cost (EGP)',
-          data: data,
+          label: isArabic ? '💰 التكلفة اليومية المقدرة (جنيه)' : '💰 Estimated Daily Cost (EGP)',
+          data,
           borderColor: '#00ff00',
-          backgroundColor: 'rgba(0, 255, 0, 0.1)',
-          tension: 0.3
+          backgroundColor: 'rgba(0, 255, 0, 0.2)',
+          fill: true,
+          tension: 0.2
         }]
       },
       options: {
         responsive: true,
         plugins: {
           legend: {
-            labels: { color: '#00ff00' }
+            labels: {
+              color: '#00ff00'
+            }
           }
         },
         scales: {
           x: {
-            ticks: { color: '#00ff00' }
+            ticks: {
+              color: '#00ff00',
+              callback: function (val, index) {
+                return labels[index];
+              }
+            }
           },
           y: {
-            ticks: { color: '#00ff00' }
+            ticks: {
+              color: '#00ff00'
+            }
           }
         }
       }
