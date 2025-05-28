@@ -11,33 +11,26 @@
       padding: 20px;
       white-space: pre-wrap;
     }
-
     table {
       width: 100%;
       margin-top: 20px;
       border: 1px solid #00ff00;
       border-collapse: collapse;
     }
-
     th, td {
       padding: 8px;
       border: 1px solid #00ff00;
     }
-
-    /* Arabic */
     .lang-ar {
       direction: rtl;
       text-align: right;
       display: block;
     }
-
-    /* English hidden by default */
     .lang-en {
       direction: ltr;
       text-align: left;
       display: none;
     }
-
     #lang-switch {
       margin-bottom: 20px;
       color: #00ff00;
@@ -53,13 +46,11 @@
 
 <button id="lang-switch">Switch to English / التبديل إلى الإنجليزية</button>
 
-<!-- Arabic content -->
 <div id="content-ar" class="lang-ar">
   <div id="terminal-ar">&gt; جاري تحميل بيانات استهلاك الكهرباء...</div>
   <canvas id="costChartAr" width="400" height="200" style="margin-top: 30px;"></canvas>
 </div>
 
-<!-- English content -->
 <div id="content-en" class="lang-en">
   <div id="terminal-en">&gt; Loading electricity usage data...</div>
   <canvas id="costChartEn" width="400" height="200" style="margin-top: 30px;"></canvas>
@@ -70,12 +61,10 @@
 <script>
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJUb4YPJoURYx0PodrANsKqu42k61PsGV2F4KsqMNWKAkKHwuszAGHyFH92d0WIu3LKt6rtb7jsKV-/pub?output=csv";
 
-  // Detect if this is a curl request (no user agent or contains curl)
   function isCurlRequest() {
     return !navigator.userAgent || navigator.userAgent.includes('curl');
   }
 
-  // Cost calculation function same for both languages
   function calculateCost(kWh) {
     let cost = 0;
     let tiers = [
@@ -86,7 +75,6 @@
       { from: 351, to: 650, price: 195 },
       { from: 651, to: 1000, price: 210 }
     ];
-
     for (const tier of tiers) {
       if (kWh <= 0) break;
       const rangeStart = tier.from;
@@ -97,11 +85,9 @@
         kWh -= unitsInTier;
       }
     }
-
-    return cost * 0.01; // Convert cents to EGP
+    return cost * 0.01; // from cents to EGP
   }
 
-  // Category function for Arabic and English
   function getCategoryAr(kWh) {
     if (kWh <= 50) return "الشريحة الأولى";
     if (kWh <= 100) return "الشريحة الثانية";
@@ -122,7 +108,6 @@
     return "Tier 7";
   }
 
-  // Logging helpers
   function logAr(line) {
     document.getElementById("terminal-ar").textContent += "\n" + line;
   }
@@ -131,321 +116,231 @@
     document.getElementById("terminal-en").textContent += "\n" + line;
   }
 
-  // Render average per day table in Arabic
-  function displayAveragePerDayAr(data) {
-    let tableHtml = "<table><thead><tr><th>#</th><th>التاريخ والوقت</th><th>القراءة</th><th>الفارق الزمني (ساعات)</th><th>المعدل اليومي (كيلوواط/ساعة)</th></tr></thead><tbody>";
-    let terminalOutput = "> متوسط الاستهلاك اليومي\n---------------------------\n";
+  function displayAveragePerDay(data, isArabic = true) {
+    let tableHtml = isArabic
+      ? "<table><thead><tr><th>#</th><th>التاريخ والوقت</th><th>القراءة</th><th>الفارق الزمني (ساعات)</th><th>المعدل اليومي (كيلوواط/ساعة)</th></tr></thead><tbody>"
+      : "<table><thead><tr><th>#</th><th>Date & Time</th><th>Reading</th><th>Time Diff (hrs)</th><th>Avg. per Day (kWh)</th></tr></thead><tbody>";
+
+    let terminalOutput = isArabic
+      ? "> متوسط الاستهلاك اليومي\n---------------------------\n"
+      : "> Average Usage Per Day\n---------------------------\n";
+
     for (let i = data.length - 21; i < data.length - 1; i++) {
       const row = data[i];
       const nextRow = data[i + 1];
-      if (nextRow) {
-        const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60);
-        const daysDiff = hoursDiff / 24;
-        const kWhUsage = nextRow.reading - row.reading;
-        const avgPerDay = kWhUsage / daysDiff;
+      if (!row || !nextRow) continue;
 
-        if (isCurlRequest()) {
-          terminalOutput += `#${i + 1} التاريخ: ${row.timestamp.toLocaleString('ar-EG')} القراءة: ${row.reading} المعدل اليومي: ${avgPerDay.toFixed(2)} كيلوواط\n`;
-        } else {
-          tableHtml += `<tr>
-            <td>${i + 1}</td>
-            <td>${row.timestamp.toLocaleString('ar-EG')}</td>
-            <td>${row.reading}</td>
-            <td>${hoursDiff.toFixed(1)}</td>
-            <td>${avgPerDay.toFixed(2)}</td>
-          </tr>`;
-        }
+      const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60);
+      const daysDiff = hoursDiff / 24;
+      if (daysDiff === 0) continue;
+
+      const kWhUsage = nextRow.reading - row.reading;
+      const avgPerDay = kWhUsage / daysDiff;
+
+      if (isCurlRequest()) {
+        terminalOutput += isArabic
+          ? `#${i + 1} التاريخ: ${row.timestamp.toLocaleString('ar-EG')} القراءة: ${row.reading} المعدل اليومي: ${avgPerDay.toFixed(2)} كيلوواط\n`
+          : `#${i + 1} Date: ${row.timestamp.toLocaleString('en-US')} Reading: ${row.reading} Avg. per Day: ${avgPerDay.toFixed(2)} kWh\n`;
+      } else {
+        tableHtml += `<tr>
+          <td>${i + 1}</td>
+          <td>${row.timestamp.toLocaleString(isArabic ? 'ar-EG' : 'en-US')}</td>
+          <td>${row.reading}</td>
+          <td>${hoursDiff.toFixed(1)}</td>
+          <td>${avgPerDay.toFixed(2)}</td>
+        </tr>`;
       }
     }
+
     if (isCurlRequest()) {
-      logAr(terminalOutput);
+      if (isArabic) logAr(terminalOutput);
+      else logEn(terminalOutput);
     } else {
       tableHtml += "</tbody></table>";
-      document.getElementById("terminal-ar").innerHTML += tableHtml;
+      if (isArabic) document.getElementById("terminal-ar").innerHTML += tableHtml;
+      else document.getElementById("terminal-en").innerHTML += tableHtml;
     }
   }
 
-  // Render average per day table in English
-  function displayAveragePerDayEn(data) {
-    let tableHtml = "<table><thead><tr><th>#</th><th>Date & Time</th><th>Reading</th><th>Time Diff (hrs)</th><th>Avg. per Day (kWh)</th></tr></thead><tbody>";
-    let terminalOutput = "> Average Usage Per Day\n---------------------------\n";
-    for (let i = data.length - 21; i < data.length - 1; i++) {
-      const row = data[i];
-      const nextRow = data[i + 1];
-      if (nextRow) {
-        const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60);
-        const daysDiff = hoursDiff / 24;
-        const kWhUsage = nextRow.reading - row.reading;
-        const avgPerDay = kWhUsage / daysDiff;
+  function processData(data, isArabic = true) {
+    const now = new Date();
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const last30DaysData = data.filter(row => row.timestamp >= last30Days);
 
-        if (isCurlRequest()) {
-          terminalOutput += `#${i + 1} Date: ${row.timestamp.toLocaleString('en-US')} Reading: ${row.reading} Avg. per Day: ${avgPerDay.toFixed(2)} kWh\n`;
+    if (last30DaysData.length < 2) {
+      if (isArabic) logAr("> لا توجد بيانات كافية للشهر الماضي.");
+      else logEn("> Not enough data for last month.");
+      return;
+    }
+
+    const first = last30DaysData[0];
+    const last = last30DaysData[last30DaysData.length - 1];
+    const totalUsage = last.reading - first.reading;
+
+    if (totalUsage <= 0) {
+      if (isArabic) logAr("> بيانات الاستهلاك غير صالحة.");
+      else logEn("> Invalid total usage data.");
+      return;
+    }
+
+    const timeDiff = (last.timestamp - first.timestamp) / (1000 * 60 * 60);
+    const daysDiff = timeDiff / 24;
+    const avgPerDay = totalUsage / daysDiff;
+    const cost = calculateCost(totalUsage);
+    const category = isArabic ? getCategoryAr(totalUsage) : getCategoryEn(totalUsage);
+
+    if (isCurlRequest()) {
+      if (isArabic) {
+        logAr(`\nملخص استهلاك الكهرباء في آخر 30 يومًا:\n- إجمالي الاستهلاك: ${totalUsage.toFixed(2)} كيلوواط\n- المعدل اليومي: ${avgPerDay.toFixed(2)} كيلوواط\n- التكلفة المقدرة: ${cost.toFixed(2)} جنيه مصري\n- الشريحة: ${category}`);
+      } else {
+        logEn(`\nElectricity Usage Summary for Last 30 Days:\n- Total Usage: ${totalUsage.toFixed(2)} kWh\n- Average per Day: ${avgPerDay.toFixed(2)} kWh\n- Estimated Cost: ${cost.toFixed(2)} EGP\n- Tier: ${category}`);
+      }
+    } else {
+      const contentEl = isArabic ? document.getElementById("terminal-ar") : document.getElementById("terminal-en");
+      contentEl.textContent += `\n\n${isArabic ? 'ملخص استهلاك الكهرباء في آخر 30 يومًا:' : 'Electricity Usage Summary for Last 30 Days:'}\n`;
+      contentEl.textContent += `- ${isArabic ? 'إجمالي الاستهلاك' : 'Total Usage'}: ${totalUsage.toFixed(2)} ${isArabic ? 'كيلوواط' : 'kWh'}\n`;
+      contentEl.textContent += `- ${isArabic ? 'المعدل اليومي' : 'Average per Day'}: ${avgPerDay.toFixed(2)} ${isArabic ? 'كيلوواط' : 'kWh'}\n`;
+      contentEl.textContent += `- ${isArabic ? 'التكلفة المقدرة' : 'Estimated Cost'}: ${cost.toFixed(2)} ${isArabic ? 'جنيه مصري' : 'EGP'}\n`;
+      contentEl.textContent += `- ${isArabic ? 'الشريحة' : 'Tier'}: ${category}\n`;
+    }
+
+    displayAveragePerDay(data, isArabic);
+
+    // Chart plotting
+    if (!isCurlRequest()) {
+      const ctx = isArabic ? document.getElementById('costChartAr').getContext('2d') : document.getElementById('costChartEn').getContext('2d');
+
+      const labels = [];
+      const costs = [];
+      const rollingCosts = [];
+
+      for (let i = 1; i < data.length; i++) {
+        const prev = data[i - 1];
+        const curr = data[i];
+        const usage = curr.reading - prev.reading;
+        const costValue = calculateCost(usage);
+
+        labels.push(curr.timestamp.toLocaleDateString(isArabic ? 'ar-EG' : 'en-US'));
+        costs.push(costValue);
+
+        if (rollingCosts.length === 0) {
+          rollingCosts.push(costValue);
         } else {
-          tableHtml += `<tr>
-            <td>${i + 1}</td>
-            <td>${row.timestamp.toLocaleString('en-US')}</td>
-            <td>${row.reading}</td>
-            <td>${hoursDiff.toFixed(1)}</td>
-            <td>${avgPerDay.toFixed(2)}</td>
-          </tr>`;
+          rollingCosts.push((costValue + rollingCosts[rollingCosts.length - 1]) / 2);
         }
       }
-    }
-    if (isCurlRequest()) {
-      logEn(terminalOutput);
-    } else {
-      tableHtml += "</tbody></table>";
-      document.getElementById("terminal-en").innerHTML += tableHtml;
-    }
-  }
 
-  // Load and process CSV data for Arabic
-  function loadArabicData() {
-    document.getElementById("terminal-ar").textContent = "> جاري تحميل بيانات استهلاك الكهرباء...";
-    fetch(csvUrl)
-      .then(response => response.text())
-      .then(csvText => {
-        const parsed = Papa.parse(csvText, { header: true });
-        const data = parsed.data
-          .filter(row => row["date time"]?.trim() && row["reading"]?.trim())
-          .map(row => ({
-            timestamp: new Date(row["date time"].trim()),
-            reading: parseInt(row["reading"].trim())
-          }))
-          .sort((a, b) => a.timestamp - b.timestamp);
+      // Remove old chart if exists
+      if (window.myChart) window.myChart.destroy();
 
-        const now = new Date();
-        const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const last30DaysData = data.filter(row => row.timestamp >= last30Days);
-
-        if (last30DaysData.length < 2) {
-          logAr("> لا توجد بيانات كافية للشهر الماضي.");
-          return;
-        }
-
-        const first = last30DaysData[0];
-        const last = last30DaysData[last30DaysData.length - 1];
-        const totalUsage = last.reading - first.reading;
-
-        if (totalUsage <= 0) {
-          logAr("> بيانات الاستهلاك غير صالحة.");
-          return;
-        }
-
-        const timeDiff = (last.timestamp - first.timestamp) / (1000 * 60 * 60);
-        const daysDiff = timeDiff / 24;
-        const avgPerDay = totalUsage / daysDiff;
-        const cost = calculateCost(totalUsage);
-        const category = getCategoryAr(totalUsage);
-        // Output latest result
-        const rollingCosts = [];
-        const labels = [];
-        const lastCost = rollingCosts[rollingCosts.length - 1];
-        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
-
-        logAr("> ملخص استهلاك الكهرباء للشهر الماضي");
-        logAr("----------------------------------------");
-        logAr(`📅 أول قراءة: ${first.timestamp.toLocaleDateString('ar-EG')}`);
-        logAr(`📅 آخر قراءة:  ${last.timestamp.toLocaleDateString('ar-EG')}`);
-        logAr(`📊 إجمالي الاستهلاك: ${totalUsage} كيلوواط/ساعة`);
-        logAr(`📊 المتوسط اليومي: ${avgPerDay.toFixed(2)} كيلوواط/يوم`);
-        logAr(`💰 التكلفة المقدرة: ${cost.toFixed(2)} جنيه`);
-        logEn(`💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه`);
-        logEn(`🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم`);
-        logAr(`📈 فئة الفاتورة: ${category}`);
-
-        displayAveragePerDayAr(data);
-
-
-
-        for (let i = 30; i < data.length; i++) {
-          const start = data[i - 30];
-          const end = data[i];
-
-          const days = (end.timestamp - start.timestamp) / (1000 * 60 * 60 * 24);
-          if (days === 0) continue;
-
-          const usage = end.reading - start.reading;
-          const avgPerDay = usage / days;
-          const estimatedMonthly = avgPerDay * 30;
-          const estimatedCost = calculateCost(estimatedMonthly);
-
-          rollingCosts.push(parseFloat(estimatedCost.toFixed(2)));
-          labels.push(end.timestamp.toLocaleDateString('ar-EG'));
-        }
-
-        // Draw chart
-        const canvas = document.getElementById('costChartAr');
-        const ctx = canvas.getContext('2d');
-        renderChart(ctx, labels, rollingCosts, true);
-
-      })
-      .catch(error => logAr("> ❌ حدث خطأ في تحميل أو معالجة البيانات: " + error.message));
-  }
-
-  // Load and process CSV data for English
-  function loadEnglishData() {
-    document.getElementById("terminal-en").textContent = "> Loading electricity usage data...";
-    fetch(csvUrl)
-      .then(response => response.text())
-      .then(csvText => {
-        const parsed = Papa.parse(csvText, { header: true });
-        const data = parsed.data
-          .filter(row => row["date time"]?.trim() && row["reading"]?.trim())
-          .map(row => ({
-            timestamp: new Date(row["date time"].trim()),
-            reading: parseInt(row["reading"].trim())
-          }))
-          .sort((a, b) => a.timestamp - b.timestamp);
-
-        const now = new Date();
-        const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const last30DaysData = data.filter(row => row.timestamp >= last30Days);
-
-        if (last30DaysData.length < 2) {
-          logEn("> Not enough data for last month.");
-          return;
-        }
-
-        const first = last30DaysData[0];
-        const last = last30DaysData[last30DaysData.length - 1];
-        const totalUsage = last.reading - first.reading;
-
-        if (totalUsage <= 0) {
-          logEn("> Invalid total usage data.");
-          return;
-        }
-
-        const timeDiff = (last.timestamp - first.timestamp) / (1000 * 60 * 60);
-        const daysDiff = timeDiff / 24;
-        const avgPerDay = totalUsage / daysDiff;
-        const cost = calculateCost(totalUsage);
-        const category = getCategoryEn(totalUsage);
-        // Output latest result
-        const rollingCosts = [];
-        const labels = [];
-        const lastCost = rollingCosts[rollingCosts.length - 1];
-        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
-
-        logEn("> Electricity Usage Summary for Last Month");
-        logEn("----------------------------------------");
-        logEn(`📅 First Reading: ${first.timestamp.toLocaleDateString('en-US')}`);
-        logEn(`📅 Last Reading:  ${last.timestamp.toLocaleDateString('en-US')}`);
-        logEn(`📊 Total Usage: ${totalUsage} kWh`);
-        logEn(`📊 Average per day: ${avgPerDay.toFixed(2)} kWh/day`);
-        logEn(`💰 Estimated Cost: ${cost.toFixed(2)} EGP`);
-        logEn(`📈 Billing Category: ${category}`);
-        logEn(`🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم`);
-        logEn(`💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه`);
-
-        displayAveragePerDayEn(data);
-
-
-        for (let i = 30; i < data.length; i++) {
-          const start = data[i - 30];
-          const end = data[i];
-
-          const days = (end.timestamp - start.timestamp) / (1000 * 60 * 60 * 24);
-          if (days === 0) continue;
-
-          const usage = end.reading - start.reading;
-          const avgPerDay = usage / days;
-          const estimatedMonthly = avgPerDay * 30;
-          const estimatedCost = calculateCost(estimatedMonthly);
-
-          rollingCosts.push(parseFloat(estimatedCost.toFixed(2)));
-          labels.push(end.timestamp.toLocaleDateString('ar-EG'));
-        }
-
-        // Draw chart
-        const canvas = document.getElementById('costChartAr');
-        const ctx = canvas.getContext('2d');
-        renderChart(ctx, labels, rollingCosts, true);
-
-      })
-      .catch(error => logEn("> ❌ Failed to fetch or process CSV: " + error.message));
-  }
-
-  function renderChart(ctx, labels, data, isArabic = false) {
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: isArabic ? '💰 التكلفة اليومية المقدرة (جنيه)' : '💰 Estimated Daily Cost (EGP)',
-          data,
-          borderColor: '#00ff00',
-          backgroundColor: 'rgba(0, 255, 0, 0.2)',
-          fill: true,
-          tension: 0.2
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            labels: {
-              color: '#00ff00'
-            }
-          }
+      window.myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: isArabic ? 'تكلفة الاستهلاك' : 'Cost',
+              data: costs,
+              borderColor: '#00ff00',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              tension: 0.3,
+              pointRadius: 0,
+              fill: false,
+            },
+            {
+              label: isArabic ? 'متوسط متحرك للتكلفة' : 'Rolling Average Cost',
+              data: rollingCosts,
+              borderColor: '#006600',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              tension: 0.3,
+              pointRadius: 0,
+              fill: false,
+            },
+          ],
         },
-        scales: {
-          x: {
-            ticks: {
-              color: '#00ff00',
-              callback: function (val, index) {
-                return labels[index];
-              }
-            }
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: '#00ff00' } },
           },
-          y: {
-            ticks: {
-              color: '#00ff00'
-            }
-          }
-        }
-      }
-    });
+          scales: {
+            x: { ticks: { color: '#00ff00' } },
+            y: {
+              ticks: {
+                color: '#00ff00',
+                callback: value => value.toFixed(2) + ' EGP',
+              },
+            },
+          },
+        },
+      });
+    }
   }
 
-  // Language switch button logic
-  const langSwitchBtn = document.getElementById('lang-switch');
-  const contentAr = document.getElementById('content-ar');
-  const contentEn = document.getElementById('content-en');
+  function parseCSVAndProcess(csvText) {
+    const parsed = Papa.parse(csvText.trim(), {
+      header: false,
+      skipEmptyLines: true,
+    });
 
-  let currentLang = 'ar';
+    if (parsed.errors.length > 0) {
+      console.error('CSV parsing errors:', parsed.errors);
+      alert('خطأ في تحليل بيانات CSV');
+      return;
+    }
 
-  langSwitchBtn.addEventListener('click', () => {
-    if (currentLang === 'ar') {
-      currentLang = 'en';
-      contentAr.style.display = 'none';
-      contentEn.style.display = 'block';
-      langSwitchBtn.textContent = 'التبديل إلى العربية / Switch to Arabic';
-      document.documentElement.lang = 'en';
-      document.documentElement.dir = 'ltr';
-      if (!contentEn.dataset.loaded) {
-        loadEnglishData();
-        contentEn.dataset.loaded = 'true';
-      }
+    // تحويل البيانات إلى مصفوفة من الكائنات مع timestamp و reading
+    const data = parsed.data
+      .map(row => {
+        // نفترض أن التاريخ في العمود 0 والقراءة في العمود 1
+        const dateStr = row[0];
+        const readingStr = row[1];
+        const timestamp = new Date(dateStr);
+        const reading = parseFloat(readingStr);
+        if (isNaN(timestamp.getTime()) || isNaN(reading)) return null;
+        return { timestamp, reading };
+      })
+      .filter(x => x !== null)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (data.length === 0) {
+      alert('لا توجد بيانات صالحة في ملف CSV');
+      return;
+    }
+
+    processData(data, true);  // اللغة العربية
+    processData(data, false); // اللغة الإنجليزية
+  }
+
+  fetch(csvUrl)
+    .then(res => res.text())
+    .then(text => {
+      if (!text) throw new Error("Empty CSV");
+      parseCSVAndProcess(text);
+    })
+    .catch(err => {
+      console.error("Failed to load or parse CSV:", err);
+      document.getElementById("terminal-ar").textContent = "> فشل تحميل البيانات.";
+      document.getElementById("terminal-en").textContent = "> Failed to load data.";
+    });
+
+  // تبديل اللغة
+  document.getElementById("lang-switch").addEventListener("click", () => {
+    const arDiv = document.getElementById("content-ar");
+    const enDiv = document.getElementById("content-en");
+    if (arDiv.style.display === "none") {
+      arDiv.style.display = "block";
+      enDiv.style.display = "none";
+      document.getElementById("lang-switch").textContent = "Switch to English / التبديل إلى الإنجليزية";
     } else {
-      currentLang = 'ar';
-      contentEn.style.display = 'none';
-      contentAr.style.display = 'block';
-      langSwitchBtn.textContent = 'Switch to English / التبديل إلى الإنجليزية';
-      document.documentElement.lang = 'ar';
-      document.documentElement.dir = 'rtl';
-      if (!contentAr.dataset.loaded) {
-        loadArabicData();
-        contentAr.dataset.loaded = 'true';
-      }
+      arDiv.style.display = "none";
+      enDiv.style.display = "block";
+      document.getElementById("lang-switch").textContent = "التبديل إلى العربية / Switch to Arabic";
     }
   });
-
-  // Load Arabic data by default on page load
-  window.onload = () => {
-    loadArabicData();
-    contentAr.dataset.loaded = 'true';
-  };
 </script>
+
 </body>
 </html>
