@@ -249,23 +249,39 @@
 
         displayAveragePerDayAr(data);
 
-        const dailyCosts = [];
-        const dailyLabels = [];
+        const rollingCosts = [];
+        const labels = [];
 
-        for (let i = 1; i < last30DaysData.length; i++) {
-          const prev = last30DaysData[i - 1];
-          const curr = last30DaysData[i];
+        for (let i = 30; i < data.length; i++) {
+          const start = data[i - 30];
+          const end = data[i];
 
-          const usage = curr.reading - prev.reading;
-          const cost = calculateCost(usage);
-          dailyCosts.push(parseFloat(cost.toFixed(2)));
+          const days = (end.timestamp - start.timestamp) / (1000 * 60 * 60 * 24);
+          if (days === 0) continue;
 
-          const label = curr.timestamp.toLocaleDateString(currentLang === 'ar' ? 'ar-EG' : 'en-US');
-          dailyLabels.push(label);
+          const usage = end.reading - start.reading;
+          const avgPerDay = usage / days;
+          const estimatedMonthly = avgPerDay * 30;
+          const estimatedCost = calculateCost(estimatedMonthly);
+
+          rollingCosts.push(parseFloat(estimatedCost.toFixed(2)));
+          labels.push(end.timestamp.toLocaleDateString('ar-EG'));
         }
+        // Output latest result
+        const lastCost = rollingCosts[rollingCosts.length - 1];
+        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
 
-        const canvas = document.getElementById(currentLang === 'ar' ? 'costChartAr' : 'costChartEn');
-        renderChart(canvas.getContext('2d'), dailyLabels, dailyCosts, currentLang === 'ar');
+        const output = `
+    🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم
+    💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه
+        `;
+        document.getElementById('terminal-ar').innerText = output;
+
+        // Draw chart
+        const canvas = document.getElementById('costChartAr');
+        const ctx = canvas.getContext('2d');
+        renderChart(ctx, labels, rollingCosts, true);
+
       })
       .catch(error => logAr("> ❌ حدث خطأ في تحميل أو معالجة البيانات: " + error.message));
   }
@@ -319,24 +335,41 @@
         logEn(`📈 Billing Category: ${category}`);
 
         displayAveragePerDayEn(data);
+        
+        const rollingCosts = [];
+        const labels = [];
 
-        const dailyCosts = [];
-        const dailyLabels = [];
+        for (let i = 30; i < data.length; i++) {
+          const start = data[i - 30];
+          const end = data[i];
 
-        for (let i = 1; i < last30DaysData.length; i++) {
-          const prev = last30DaysData[i - 1];
-          const curr = last30DaysData[i];
+          const days = (end.timestamp - start.timestamp) / (1000 * 60 * 60 * 24);
+          if (days === 0) continue;
 
-          const usage = curr.reading - prev.reading;
-          const cost = calculateCost(usage);
-          dailyCosts.push(parseFloat(cost.toFixed(2)));
+          const usage = end.reading - start.reading;
+          const avgPerDay = usage / days;
+          const estimatedMonthly = avgPerDay * 30;
+          const estimatedCost = calculateCost(estimatedMonthly);
 
-          const label = curr.timestamp.toLocaleDateString(currentLang === 'ar' ? 'ar-EG' : 'en-US');
-          dailyLabels.push(label);
+          rollingCosts.push(parseFloat(estimatedCost.toFixed(2)));
+          labels.push(end.timestamp.toLocaleDateString('ar-EG'));
         }
 
-        const canvas = document.getElementById(currentLang === 'ar' ? 'costChartAr' : 'costChartEn');
-        renderChart(canvas.getContext('2d'), dailyLabels, dailyCosts, currentLang === 'ar');
+        // Output latest result
+        const lastCost = rollingCosts[rollingCosts.length - 1];
+        const lastAvg = (data[data.length - 1].reading - data[data.length - 31].reading) / 30;
+
+        const output = `
+    🔌 متوسط الاستهلاك اليومي (آخر ٣٠ يومًا): ${lastAvg.toFixed(2)} كيلو واط/يوم
+    💰 التكلفة الشهرية المقدرة: ${lastCost.toFixed(2)} جنيه
+        `;
+        document.getElementById('terminal-ar').innerText = output;
+
+        // Draw chart
+        const canvas = document.getElementById('costChartAr');
+        const ctx = canvas.getContext('2d');
+        renderChart(ctx, labels, rollingCosts, true);
+
       })
       .catch(error => logEn("> ❌ Failed to fetch or process CSV: " + error.message));
   }
