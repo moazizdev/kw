@@ -1,6 +1,9 @@
 const csvUrl =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJUb4YPJoURYx0PodrANsKqu42k61PsGV2F4KsqMNWKAkKHwuszAGHyFH92d0WIu3LKt6rtb7jsKV-/pub?output=csv";
 
+const billCsvUrl =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8uqH4eGPe9dJZo-y18XJu0kpJWs5xvOyqy6NZVPuv3OLiKlhFa8sp9_O4xKzB6flpSv0RcOcvxhiL/pubhtml";
+
 // Detect if this is a curl request (no user agent or contains curl)
 function isCurlRequest() {
   return !navigator.userAgent || navigator.userAgent.includes("curl");
@@ -259,6 +262,7 @@ function displayRollingCostChartEn(data) {
   const canvas = document.createElement("canvas");
   canvas.id = "rolling-cost-chart";
   chartContainer.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
 
   const rollingCosts = [];
 
@@ -279,60 +283,90 @@ function displayRollingCostChartEn(data) {
       const cost = calculateCost(usage);
       rollingCosts.push({
         date: currentDate.toLocaleDateString("en-US"),
-        cost: cost.toFixed(2),
+        cost: cost,
       });
     }
   }
 
-  const ctx = canvas.getContext("2d");
-  new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: rollingCosts.map((d) => d.date),
-      datasets: [
-        {
-          label: "Estimated Cost",
-          data: rollingCosts.map((d) => d.cost),
-          borderColor: "#00ff00",
-          backgroundColor: "rgba(0, 255, 0, 0.3)",
-          tension: 0.3,
-          fill: true,
+  // Fetch and add billing data as a second dataset
+  fetch(billCsvUrl.replace("/pubhtml", "/pub?output=csv"))
+    .then((response) => response.text())
+    .then((csvText) => {
+      const parsed = Papa.parse(csvText, { header: true });
+      const billingData = parsed.data
+        .filter((row) => row["date"]?.trim() && row["total_bill"]?.trim())
+        .map((row) => ({
+          date: new Date(row["date"].trim()).toLocaleDateString("en-US"),
+          cost: parseFloat(row["total_bill"].trim()),
+        }));
+
+      // Match dates in rollingCosts for alignment
+      const billingMap = Object.fromEntries(
+        billingData.map((b) => [b.date, b.cost])
+      );
+
+      const alignedBillingData = rollingCosts.map((entry) => ({
+        date: entry.date,
+        cost: billingMap[entry.date] || null,
+      }));
+
+      new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: rollingCosts.map((d) => d.date),
+          datasets: [
+            {
+              label: "Estimated Cost",
+              data: rollingCosts.map((d) => d.cost),
+              borderColor: "#00ff00",
+              backgroundColor: "rgba(0, 255, 0, 0.3)",
+              tension: 0.3,
+              fill: true,
+            },
+            {
+              label: "Actual Bill",
+              data: alignedBillingData.map((d) => d.cost),
+              borderColor: "#ff0000",
+              backgroundColor: "rgba(255, 0, 0, 0.3)",
+              tension: 0.3,
+              fill: false,
+              spanGaps: true,
+            },
+          ],
         },
-      ],
-    },
-    options: {
-      scales: {
-        x: {
-          ticks: { color: "#00ff00" },
-          grid: {
-            color: "#4d4d4d",
-            drawBorder: true,
-            drawOnChartArea: true,
+        options: {
+          scales: {
+            x: {
+              ticks: { color: "#00ff00" },
+              grid: {
+                color: "#4d4d4d",
+                drawBorder: true,
+                drawOnChartArea: true,
+              },
+              border: { color: "#00ff00" },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: "#00ff00" },
+              grid: {
+                color: "#4d4d4d",
+                drawBorder: true,
+                drawOnChartArea: true,
+              },
+              border: { color: "#00ff00" },
+            },
           },
-          border: {
-            color: "#00ff00",
+          plugins: {
+            legend: {
+              labels: { color: "#00ff00" },
+            },
           },
         },
-        y: {
-          beginAtZero: true,
-          ticks: { color: "#00ff00" },
-          grid: {
-            color: "#4d4d4d",
-            drawBorder: true,
-            drawOnChartArea: true,
-          },
-          border: {
-            color: "#00ff00",
-          },
-        },
-      },
-      plugins: {
-        legend: {
-          labels: { color: "#00ff00" },
-        },
-      },
-    },
-  });
+      });
+    })
+    .catch((error) => {
+      logEn("> ❌ Failed to fetch billing CSV: " + error.message);
+    });
 }
 
 // Language switch button logic
