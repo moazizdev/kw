@@ -282,13 +282,14 @@ function displayRollingCostChartEn(data) {
     if (usage > 0) {
       const cost = calculateCost(usage);
       rollingCosts.push({
-        date: currentDate.toLocaleDateString("en-US"),
+        date: currentDate,
         cost: cost,
+        month: currentDate.toISOString().slice(0, 7), // "YYYY-MM"
       });
     }
   }
 
-  // Fetch and add billing data as a second dataset
+  // Fetch billing data as CSV
   fetch(billCsvUrl.replace("/pubhtml", "/pub?output=csv"))
     .then((response) => response.text())
     .then((csvText) => {
@@ -296,28 +297,50 @@ function displayRollingCostChartEn(data) {
       const billingData = parsed.data
         .filter((row) => row["date"]?.trim() && row["total_bill"]?.trim())
         .map((row) => ({
-          date: new Date(row["date"].trim()).toLocaleDateString("en-US"),
+          date: new Date(row["date"].trim()),
           cost: parseFloat(row["total_bill"].trim()),
+          month: new Date(row["date"].trim()).toISOString().slice(0, 7),
         }));
 
-      // Match dates in rollingCosts for alignment
-      const billingMap = Object.fromEntries(
-        billingData.map((b) => [b.date, b.cost])
-      );
+      // Group billing costs by month, pick one cost per month (e.g., last)
+      const billingByMonth = {};
+      billingData.forEach((entry) => {
+        billingByMonth[entry.month] = entry.cost; // overwrite keeps last cost per month
+      });
 
-      const alignedBillingData = rollingCosts.map((entry) => ({
-        date: entry.date,
-        cost: billingMap[entry.date] || null,
-      }));
+      // Group rollingCosts by month, and pick one date per month for billing points
+      const months = [...new Set(rollingCosts.map((rc) => rc.month))];
+
+      // For labels, use months (e.g. "2025-05")
+      const labels = months;
+
+      // Estimated cost: average or last rolling cost per month
+      const estimatedCostsByMonth = {};
+      months.forEach((month) => {
+        const costsInMonth = rollingCosts.filter((rc) => rc.month === month);
+        // pick last cost in that month
+        if (costsInMonth.length) {
+          estimatedCostsByMonth[month] =
+            costsInMonth[costsInMonth.length - 1].cost;
+        } else {
+          estimatedCostsByMonth[month] = null;
+        }
+      });
+
+      // Prepare data arrays for chart
+      const estimatedCosts = months.map(
+        (m) => estimatedCostsByMonth[m] || null
+      );
+      const billingCosts = months.map((m) => billingByMonth[m] || null);
 
       new Chart(ctx, {
         type: "line",
         data: {
-          labels: rollingCosts.map((d) => d.date),
+          labels,
           datasets: [
             {
               label: "Estimated Cost",
-              data: rollingCosts.map((d) => d.cost),
+              data: estimatedCosts,
               borderColor: "#00ff00",
               backgroundColor: "rgba(0, 255, 0, 0.3)",
               tension: 0.3,
@@ -325,7 +348,7 @@ function displayRollingCostChartEn(data) {
             },
             {
               label: "Actual Bill",
-              data: alignedBillingData.map((d) => d.cost),
+              data: billingCosts,
               borderColor: "#ff0000",
               backgroundColor: "rgba(255, 0, 0, 0.3)",
               tension: 0.3,
