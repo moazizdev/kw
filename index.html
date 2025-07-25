@@ -2,23 +2,200 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ملخص استهلاك الكهرباء / Electricity Usage Summary</title>
     <link rel="stylesheet" href="styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   </head>
   <body>
-    <button id="lang-switch">Switch to English / التبديل إلى الإنجليزية</button>
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-content">
+          <h1 class="app-title">
+            <i class="fas fa-bolt"></i>
+            <span class="ar-text">مراقب استهلاك الكهرباء</span>
+            <span class="en-text">Electricity Usage Monitor</span>
+          </h1>
+          <button id="lang-switch" class="lang-switch">
+            <i class="fas fa-language"></i>
+            <span>Switch to English / التبديل إلى الإنجليزية</span>
+          </button>
+        </div>
+      </header>
 
-    <!-- Arabic content -->
-    <div id="content-ar" class="lang-ar">
-      <div id="terminal-ar">&gt; جاري تحميل بيانات استهلاك الكهرباء...</div>
+      <!-- Dashboard Cards -->
+      <div class="dashboard-grid">
+        <!-- Current Month Summary -->
+        <div class="card summary-card">
+          <div class="card-header">
+            <h3><i class="fas fa-chart-line"></i> <span class="ar-text">ملخص الشهر الحالي</span><span class="en-text">Current Month Summary</span></h3>
+          </div>
+          <div class="card-content">
+            <div class="metric-grid">
+              <div class="metric">
+                <div class="metric-value" id="total-usage">--</div>
+                <div class="metric-label">
+                  <span class="ar-text">كيلوواط/ساعة</span>
+                  <span class="en-text">kWh</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="metric-value" id="daily-avg">--</div>
+                <div class="metric-label">
+                  <span class="ar-text">متوسط يومي</span>
+                  <span class="en-text">Daily Avg</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="metric-value" id="estimated-cost">--</div>
+                <div class="metric-label">
+                  <span class="ar-text">جنيه مقدر</span>
+                  <span class="en-text">EGP Est.</span>
+                </div>
+              </div>
+              <div class="metric">
+                <div class="metric-value" id="billing-tier">--</div>
+                <div class="metric-label">
+                  <span class="ar-text">الشريحة</span>
+                  <span class="en-text">Tier</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card actions-card">
+          <div class="card-header">
+            <h3><i class="fas fa-tools"></i> <span class="ar-text">إجراءات سريعة</span><span class="en-text">Quick Actions</span></h3>
+          </div>
+          <div class="card-content">
+            <div class="actions-grid">
+              <button class="action-btn" onclick="refreshData()">
+                <i class="fas fa-sync-alt"></i>
+                <span class="ar-text">تحديث البيانات</span>
+                <span class="en-text">Refresh Data</span>
+              </button>
+              <button class="action-btn" onclick="exportData()">
+                <i class="fas fa-download"></i>
+                <span class="ar-text">تصدير البيانات</span>
+                <span class="en-text">Export Data</span>
+              </button>
+              <div class="action-info">
+                <i class="fas fa-info-circle"></i>
+                <span class="ar-text">تحديث تلقائي للتوقعات</span>
+                <span class="en-text">Projections update automatically</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Projections Section -->
+      <div class="projections-section">
+        <div class="card projections-card">
+          <div class="card-header">
+            <h3><i class="fas fa-crystal-ball"></i> <span class="ar-text">توقعات الشهر القادم</span><span class="en-text">Next Month Projections</span></h3>
+          </div>
+          <div class="card-content">
+            <div id="projections-content" class="projections-display">
+              <div class="projection-item">
+                <div class="projection-icon usage"><i class="fas fa-bolt"></i></div>
+                <div class="projection-info">
+                  <h4><span class="ar-text">الاستهلاك المتوقع</span><span class="en-text">Projected Usage</span></h4>
+                  <p class="projection-value" id="projected-usage">--</p>
+                </div>
+              </div>
+              <div class="projection-item">
+                <div class="projection-icon cost"><i class="fas fa-money-bill-wave"></i></div>
+                <div class="projection-info">
+                  <h4><span class="ar-text">التكلفة المتوقعة</span><span class="en-text">Projected Cost</span></h4>
+                  <p class="projection-value" id="projected-cost">--</p>
+                </div>
+              </div>
+              <div class="projection-item">
+                <div class="projection-icon tier"><i class="fas fa-layer-group"></i></div>
+                <div class="projection-info">
+                  <h4><span class="ar-text">الشريحة المتوقعة</span><span class="en-text">Projected Tier</span></h4>
+                  <p class="projection-value" id="projected-tier">--</p>
+                </div>
+              </div>
+              <div class="projection-comparison" id="projection-comparison">
+                <div class="comparison-content">
+                  <span class="ar-text">مقارنة مع الشهر الحالي</span>
+                  <span class="en-text">Compared to Current Month</span>
+                  <div class="trend" id="projection-trend">
+                    <i class="fas fa-minus"></i>
+                    <span>--</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="charts-section">
+        <div class="card chart-card">
+          <div class="card-header">
+            <h3><i class="fas fa-chart-area"></i> <span class="ar-text">مقارنة التكلفة المقدرة مع الفعلية</span><span class="en-text">Estimated vs Actual Cost</span></h3>
+            <div class="chart-controls">
+              <select id="chart-period" class="chart-select">
+                <option value="6">6 months</option>
+                <option value="12" selected>12 months</option>
+                <option value="24">24 months</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-content">
+            <div id="shared-chart-container" class="chart-container"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Table Section -->
+      <div class="data-section">
+        <div class="card data-card">
+          <div class="card-header">
+            <h3><i class="fas fa-table"></i> <span class="ar-text">سجل الاستهلاك اليومي</span><span class="en-text">Daily Usage Log</span></h3>
+            <div class="table-controls">
+              <input type="search" id="search-input" placeholder="Search..." class="search-input">
+              <button class="filter-btn" onclick="toggleFilters()">
+                <i class="fas fa-filter"></i>
+              </button>
+            </div>
+          </div>
+          <div class="card-content">
+            <!-- Arabic content -->
+            <div id="content-ar" class="lang-content">
+              <div id="terminal-ar" class="data-display"></div>
+            </div>
+            <!-- English content -->
+            <div id="content-en" class="lang-content">
+              <div id="terminal-en" class="data-display"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading Overlay -->
+      <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner">
+          <i class="fas fa-bolt fa-spin"></i>
+          <p class="ar-text">جاري تحميل البيانات...</p>
+          <p class="en-text">Loading data...</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <p class="ar-text">مراقب استهلاك الكهرباء - تتبع ذكي لاستهلاكك</p>
+        <p class="en-text">Electricity Usage Monitor - Smart tracking for your consumption</p>
+      </footer>
     </div>
-
-    <!-- English content -->
-    <div id="content-en" class="lang-en">
-      <div id="terminal-en">&gt; Loading electricity usage data...</div>
-    </div>
-
-    <div id="shared-chart-container" style="margin-top: 40px"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
