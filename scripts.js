@@ -1,20 +1,76 @@
-const csvUrl =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSSg37J5X0DRuSl3X61vyxB2j3szzkxqR_ut6hLeL0KudWW7sZljceS4FKtfR9cuGGHryL7tzRYVda3/pub?output=csv";
+// Static snapshot generated from Prisma Postgres by `npm run sync`
+// (and by the GitHub Actions workflow before each Pages deployment).
+const DATA_URL = "data/dashboard.json";
 
-const billCsvUrl =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vQTGd43YouVicDWfpYuY__AVeIJLp2xrRKXv3jBmcKibwPv5UQsyRBMAWBe5mgkV2IbwJ9EIVE69RrS/pub?output=csv";
+let dashboardDataPromise = null;
 
-// Normalize a parsed row's keys to lowercase trimmed strings
-function normalizeRow(row) {
-  const normalized = {};
-  for (const key of Object.keys(row)) {
-    normalized[key.trim().toLowerCase()] = row[key];
-  }
-  return normalized;
+function monthKey(date) {
+  return date.toISOString().slice(0, 7);
 }
 
-function isCurlRequest() {
-  return !navigator.userAgent || navigator.userAgent.includes("curl");
+function currentChartPeriod() {
+  const value = parseInt(document.getElementById("chart-period")?.value ?? "12", 10);
+  return Number.isFinite(value) ? value : 12;
+}
+
+// Fetch the snapshot once and share it between the Arabic and English views.
+async function loadDashboardData({ force = false } = {}) {
+  if (force) dashboardDataPromise = null;
+  if (dashboardDataPromise) return dashboardDataPromise;
+
+  dashboardDataPromise = fetch(DATA_URL, { cache: "no-store" })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} while loading ${DATA_URL}`);
+      }
+      return response.json();
+    })
+    .then((payload) => {
+      const readings = (payload.readings ?? [])
+        .map((row) => ({
+          timestamp: new Date(row.timestamp),
+          reading: Number(row.reading),
+          usage:
+            row.usage === null || row.usage === undefined
+              ? null
+              : Number(row.usage),
+        }))
+        .filter(
+          (row) =>
+            !Number.isNaN(row.timestamp.getTime()) &&
+            Number.isFinite(row.reading),
+        )
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      const bills = (payload.bills ?? [])
+        .map((row) => {
+          const date = new Date(row.date);
+          const period =
+            row.period ||
+            (Number.isNaN(date.getTime()) ? "" : monthKey(date));
+          return {
+            date,
+            period,
+            cost: Number(row.totalBill ?? row.cost),
+          };
+        })
+        .filter(
+          (row) =>
+            !Number.isNaN(row.date.getTime()) && Number.isFinite(row.cost),
+        );
+
+      return {
+        readings,
+        bills,
+        generatedAt: payload.generatedAt ?? null,
+      };
+    })
+    .catch((error) => {
+      dashboardDataPromise = null;
+      throw error;
+    });
+
+  return dashboardDataPromise;
 }
 
 // ─── Official ERA tariff effective 1 Sep 2024 ───────────────────────────────
@@ -114,7 +170,7 @@ function displayAveragePerDayAr(data) {
       const bd = calculateCostBreakdown(kWhUsage);
       tableHtml += `<tr>
         <td>${i + 1}</td>
-        <td>${row.timestamp.toLocaleString("ar-EG")}</td>
+        <td>${row.timestamp.toLocaleString("ar-EG", { timeZone: "UTC" })}</td>
         <td>${row.reading}</td>
         <td>${hoursDiff.toFixed(1)}</td>
         <td>${avgPerDay.toFixed(2)}</td>
@@ -141,7 +197,7 @@ function displayAveragePerDayEn(data) {
       const bd = calculateCostBreakdown(kWhUsage);
       tableHtml += `<tr>
         <td>${i + 1}</td>
-        <td>${row.timestamp.toLocaleString("en-US")}</td>
+        <td>${row.timestamp.toLocaleString("en-US", { timeZone: "UTC" })}</td>
         <td>${row.reading}</td>
         <td>${hoursDiff.toFixed(1)}</td>
         <td>${avgPerDay.toFixed(2)}</td>
@@ -153,107 +209,127 @@ function displayAveragePerDayEn(data) {
   document.getElementById("terminal-en").innerHTML += tableHtml;
 }
 
-function parseElecData(csvText) {
-  const parsed = Papa.parse(csvText, { header: true });
-  return parsed.data
-    .map(normalizeRow)
-    .filter((row) => row["date time"]?.trim() && row["reading"]?.trim())
-    .map((row) => ({
-      timestamp: new Date(row["date time"].trim()),
-      reading: parseInt(row["reading"].trim()),
-    }))
-    .filter((row) => !isNaN(row.timestamp.getTime()) && !isNaN(row.reading))
-    .sort((a, b) => a.timestamp - b.timestamp);
-}
+function processElecData(data) {
+  if (!Array.isArray(data) || data.length < 2) {
+    return { data: data ?? [], error: true };
+  }
 
-function parseBillData(csvText) {
-  const parsed = Papa.parse(csvText, { header: true });
-  return parsed.data
-    .map(normalizeRow)
-    .filter((row) => row["date"]?.trim() && row["total_bill"]?.trim())
-    .map((row) => ({
-      date: new Date(row["date"].trim()),
-      cost: parseFloat(row["total_bill"].trim()),
-      month: new Date(row["date"].trim()).toISOString().slice(0, 7),
-    }))
-    .filter((row) => !isNaN(row.date.getTime()) && !isNaN(row.cost));
-}
-
-function processElecData(csvText) {
-  const data = parseElecData(csvText);
-  const now = new Date();
-  const last30DaysData = data.filter((row) => row.timestamp >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  // Anchor the 30-day window to the newest reading in the database, not to
+  // today's date. Otherwise a stale import makes the dashboard look empty.
+  const last = data[data.length - 1];
+  const windowStart = new Date(
+    last.timestamp.getTime() - 30 * 24 * 60 * 60 * 1000,
+  );
+  const last30DaysData = data.filter(
+    (row) => row.timestamp >= windowStart && row.timestamp <= last.timestamp,
+  );
   if (last30DaysData.length < 2) return { data, error: true };
+
   const first = last30DaysData[0];
-  const last = last30DaysData[last30DaysData.length - 1];
   const totalUsage = last.reading - first.reading;
   if (totalUsage <= 0) return { data, error: true };
+
   const daysDiff = (last.timestamp - first.timestamp) / (1000 * 60 * 60 * 24);
   const avgPerDay = totalUsage / daysDiff;
   const breakdown = calculateCostBreakdown(totalUsage);
   return { data, first, last, totalUsage, daysDiff, avgPerDay, breakdown, error: false };
 }
 
-function loadArabicData() {
-  document.getElementById("terminal-ar").innerHTML = "> جاري تحميل بيانات استهلاك الكهرباء...";
-  fetch(csvUrl)
-    .then((r) => r.text())
-    .then((csvText) => {
-      const result = processElecData(csvText);
-      if (result.error) { logAr("> ❌ لا توجد بيانات كافية أو بيانات غير صالحة."); hideLoading(); return; }
-      const { data, first, last, totalUsage, avgPerDay, breakdown } = result;
-      const category = getCategoryAr(totalUsage);
-      updateSummaryCards({ totalUsage, avgPerDay, cost: breakdown.total, tier: category, breakdown });
-      logAr("> ملخص استهلاك الكهرباء للشهر الماضي");
-      logAr("----------------------------------------");
-      logAr(`📅 أول قراءة: ${first.timestamp.toLocaleDateString("ar-EG")}`);
-      logAr(`📅 آخر قراءة:  ${last.timestamp.toLocaleDateString("ar-EG")}`);
-      logAr(`⚡ إجمالي الاستهلاك: ${totalUsage} كيلوواط/ساعة`);
-      logAr(`📊 المتوسط اليومي: ${avgPerDay.toFixed(2)} كيلوواط/يوم`);
-      logAr(`💡 تكلفة الاستهلاك: ${breakdown.consumptionCost.toFixed(2)} جنيه`);
-      logAr(`🔧 رسوم الخدمة: ${breakdown.serviceFee.toFixed(2)} جنيه`);
-      logAr(`💰 إجمالي الفاتورة المقدرة: ${breakdown.total.toFixed(2)} جنيه`);
-      logAr(`📈 الشريحة: ${category}`);
-      currentData = data;
-      displayAveragePerDayAr(data);
-      displayRollingCostChartEn(data);
-      hideLoading();
-    })
-    .catch((err) => { logAr("> ❌ خطأ: " + err.message); hideLoading(); });
+function lastSyncedText(generatedAt, locale) {
+  if (!generatedAt) return "";
+  const date = new Date(generatedAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(locale, { timeZone: "UTC" });
 }
 
-function loadEnglishData() {
+async function loadArabicData() {
+  const terminal = document.getElementById("terminal-ar");
+  terminal.innerHTML = "> جاري تحميل بيانات استهلاك الكهرباء...";
+
+  try {
+    const { readings, bills, generatedAt } = await loadDashboardData();
+    const result = processElecData(readings);
+
+    if (result.error) {
+      logAr("> ⚠️ لا توجد قراءات كافية في قاعدة البيانات. أضف البيانات ثم شغّل npm run sync.");
+      const synced = lastSyncedText(generatedAt, "ar-EG");
+      if (synced) logAr(`> 🕒 آخر مزامنة: ${synced}`);
+      return;
+    }
+
+    const { data, first, last, totalUsage, avgPerDay, breakdown } = result;
+    const category = getCategoryAr(totalUsage);
+    updateSummaryCards({ totalUsage, avgPerDay, cost: breakdown.total, tier: category, breakdown });
+    terminal.innerHTML = "> ملخص استهلاك الكهرباء لآخر 30 يوماً";
+    logAr("----------------------------------------");
+    logAr(`📅 أول قراءة: ${first.timestamp.toLocaleDateString("ar-EG", { timeZone: "UTC" })}`);
+    logAr(`📅 آخر قراءة:  ${last.timestamp.toLocaleDateString("ar-EG", { timeZone: "UTC" })}`);
+    logAr(`⚡ إجمالي الاستهلاك: ${totalUsage} كيلوواط/ساعة`);
+    logAr(`📊 المتوسط اليومي: ${avgPerDay.toFixed(2)} كيلوواط/يوم`);
+    logAr(`💡 تكلفة الاستهلاك: ${breakdown.consumptionCost.toFixed(2)} جنيه`);
+    logAr(`🔧 رسوم الخدمة: ${breakdown.serviceFee.toFixed(2)} جنيه`);
+    logAr(`💰 إجمالي الفاتورة المقدرة: ${breakdown.total.toFixed(2)} جنيه`);
+    logAr(`📈 الشريحة: ${category}`);
+    const synced = lastSyncedText(generatedAt, "ar-EG");
+    if (synced) logAr(`> 🕒 آخر مزامنة: ${synced}`);
+    currentData = data;
+    currentBills = bills;
+    displayAveragePerDayAr(data);
+    displayRollingCostChartEn(data, bills, currentChartPeriod());
+  } catch (err) {
+    logAr("> ❌ خطأ: " + err.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function loadEnglishData() {
   const terminalEn = document.getElementById("terminal-en");
   if (!terminalEn) { hideLoading(); return; }
   terminalEn.innerHTML = "> Loading electricity usage data...";
-  fetch(csvUrl)
-    .then((r) => r.text())
-    .then((csvText) => {
-      const result = processElecData(csvText);
-      if (result.error) { logEn("> ❌ Not enough data or invalid data."); hideLoading(); return; }
-      const { data, first, last, totalUsage, avgPerDay, breakdown } = result;
-      const category = getCategoryEn(totalUsage);
-      updateSummaryCards({ totalUsage, avgPerDay, cost: breakdown.total, tier: category, breakdown });
-      logEn("> Electricity Usage Summary for Last Month");
-      logEn("----------------------------------------");
-      logEn(`📅 First Reading: ${first.timestamp.toLocaleDateString("en-US")}`);
-      logEn(`📅 Last Reading:  ${last.timestamp.toLocaleDateString("en-US")}`);
-      logEn(`⚡ Total Usage: ${totalUsage} kWh`);
-      logEn(`📊 Average per day: ${avgPerDay.toFixed(2)} kWh/day`);
-      logEn(`💡 Consumption cost: ${breakdown.consumptionCost.toFixed(2)} EGP`);
-      logEn(`🔧 Service fee: ${breakdown.serviceFee.toFixed(2)} EGP`);
-      logEn(`💰 Estimated total bill: ${breakdown.total.toFixed(2)} EGP`);
-      logEn(`📈 Billing tier: ${category}`);
-      currentData = data;
-      displayAveragePerDayEn(data);
-      displayRollingCostChartEn(data);
-      hideLoading();
-    })
-    .catch((err) => { logEn("> ❌ Error: " + err.message); hideLoading(); });
+
+  try {
+    const { readings, bills, generatedAt } = await loadDashboardData();
+    const result = processElecData(readings);
+
+    if (result.error) {
+      logEn("> ⚠️ Not enough readings in the database. Import data, then run npm run sync.");
+      const synced = lastSyncedText(generatedAt, "en-US");
+      if (synced) logEn(`> 🕒 Last sync: ${synced}`);
+      return;
+    }
+
+    const { data, first, last, totalUsage, avgPerDay, breakdown } = result;
+    const category = getCategoryEn(totalUsage);
+    updateSummaryCards({ totalUsage, avgPerDay, cost: breakdown.total, tier: category, breakdown });
+    terminalEn.innerHTML = "> Electricity Usage Summary for the Last 30 Days";
+    logEn("----------------------------------------");
+    logEn(`📅 First Reading: ${first.timestamp.toLocaleDateString("en-US", { timeZone: "UTC" })}`);
+    logEn(`📅 Last Reading:  ${last.timestamp.toLocaleDateString("en-US", { timeZone: "UTC" })}`);
+    logEn(`⚡ Total Usage: ${totalUsage} kWh`);
+    logEn(`📊 Average per day: ${avgPerDay.toFixed(2)} kWh/day`);
+    logEn(`💡 Consumption cost: ${breakdown.consumptionCost.toFixed(2)} EGP`);
+    logEn(`🔧 Service fee: ${breakdown.serviceFee.toFixed(2)} EGP`);
+    logEn(`💰 Estimated total bill: ${breakdown.total.toFixed(2)} EGP`);
+    logEn(`📈 Billing tier: ${category}`);
+    const synced = lastSyncedText(generatedAt, "en-US");
+    if (synced) logEn(`> 🕒 Last sync: ${synced}`);
+    currentData = data;
+    currentBills = bills;
+    displayAveragePerDayEn(data);
+    displayRollingCostChartEn(data, bills, currentChartPeriod());
+  } catch (err) {
+    logEn("> ❌ Error: " + err.message);
+  } finally {
+    hideLoading();
+  }
 }
 
-function displayRollingCostChartEn(data, monthsPeriod = 12) {
+let rollingChart = null;
+
+function displayRollingCostChartEn(data, bills = [], monthsPeriod = 12) {
   const chartContainer = document.getElementById("shared-chart-container");
+  if (!chartContainer) return;
   chartContainer.innerHTML = "";
   const canvas = document.createElement("canvas");
   canvas.id = "rolling-cost-chart";
@@ -261,77 +337,79 @@ function displayRollingCostChartEn(data, monthsPeriod = 12) {
   const ctx = canvas.getContext("2d");
 
   const rollingCosts = [];
-  for (let i = 0; i < data.length; i++) {
-    const currentDate = data[i].timestamp;
+  for (const row of data) {
+    const currentDate = row.timestamp;
     const startDate = new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     const windowData = data.filter((r) => r.timestamp >= startDate && r.timestamp <= currentDate);
     if (windowData.length < 2) continue;
     const usage = windowData[windowData.length - 1].reading - windowData[0].reading;
     if (usage > 0) {
-      rollingCosts.push({ date: currentDate, cost: calculateCost(usage), month: currentDate.toISOString().slice(0, 7) });
+      rollingCosts.push({ date: currentDate, cost: calculateCost(usage), month: monthKey(currentDate) });
     }
   }
 
-  fetch(billCsvUrl)
-    .then((r) => r.text())
-    .then((csvText) => {
-      const billingData = parseBillData(csvText);
-      const billingByMonth = {};
-      billingData.forEach((e) => { billingByMonth[e.month] = e.cost; });
+  const billingByMonth = {};
+  for (const bill of bills) {
+    billingByMonth[bill.period] = bill.cost;
+  }
 
-      const months = [...new Set(rollingCosts.map((rc) => rc.month))];
-      const filteredMonths = months.slice(-monthsPeriod);
+  const months = [...new Set(rollingCosts.map((rc) => rc.month))];
+  const filteredMonths = months.slice(-monthsPeriod);
 
-      const estimatedCostsByMonth = {};
-      months.forEach((month) => {
-        const costsInMonth = rollingCosts.filter((rc) => rc.month === month);
-        estimatedCostsByMonth[month] = costsInMonth.length ? costsInMonth[costsInMonth.length - 1].cost : null;
-      });
+  const estimatedCostsByMonth = {};
+  months.forEach((month) => {
+    const costsInMonth = rollingCosts.filter((rc) => rc.month === month);
+    estimatedCostsByMonth[month] = costsInMonth.length ? costsInMonth[costsInMonth.length - 1].cost : null;
+  });
 
-      new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: filteredMonths,
-          datasets: [
-            {
-              label: "Estimated Bill",
-              data: filteredMonths.map((m) => estimatedCostsByMonth[m] || null),
-              borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.1)",
-              tension: 0.4, fill: true,
-              pointBackgroundColor: "#10b981", pointBorderColor: "#ffffff", pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8,
-            },
-            {
-              label: "Actual Bill",
-              data: filteredMonths.map((m) => billingByMonth[m] || null),
-              borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.1)",
-              tension: 0.4, fill: false, spanGaps: true,
-              pointBackgroundColor: "#3b82f6", pointBorderColor: "#ffffff", pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8,
-            },
-          ],
+  if (rollingChart) {
+    rollingChart.destroy();
+    rollingChart = null;
+  }
+
+  rollingChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: filteredMonths,
+      datasets: [
+        {
+          label: "Estimated Bill",
+          data: filteredMonths.map((m) => estimatedCostsByMonth[m] ?? null),
+          borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.1)",
+          tension: 0.4, fill: true,
+          pointBackgroundColor: "#10b981", pointBorderColor: "#ffffff", pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8,
         },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: { labels: { color: "#f1f5f9", usePointStyle: true, padding: 20 } },
-            tooltip: {
-              backgroundColor: "#1e293b", titleColor: "#f1f5f9", bodyColor: "#94a3b8",
-              borderColor: "#3b82f6", borderWidth: 1, cornerRadius: 8, displayColors: true,
-              callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(2)} EGP` },
-            },
-          },
-          scales: {
-            x: { ticks: { color: "#94a3b8", maxTicksLimit: 8 }, grid: { color: "#334155", drawBorder: false }, border: { display: false } },
-            y: { beginAtZero: true, ticks: { color: "#94a3b8", callback: (v) => v.toFixed(0) + " EGP" }, grid: { color: "#334155", drawBorder: false }, border: { display: false } },
-          },
+        {
+          label: "Actual Bill",
+          data: filteredMonths.map((m) => billingByMonth[m] ?? null),
+          borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.1)",
+          tension: 0.4, fill: false, spanGaps: true,
+          pointBackgroundColor: "#3b82f6", pointBorderColor: "#ffffff", pointBorderWidth: 2, pointRadius: 5, pointHoverRadius: 8,
         },
-      });
-    })
-    .catch((err) => { logEn("> ❌ Failed to fetch billing CSV: " + err.message); });
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { labels: { color: "#f1f5f9", usePointStyle: true, padding: 20 } },
+        tooltip: {
+          backgroundColor: "#1e293b", titleColor: "#f1f5f9", bodyColor: "#94a3b8",
+          borderColor: "#3b82f6", borderWidth: 1, cornerRadius: 8, displayColors: true,
+          callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(2)} EGP` },
+        },
+      },
+      scales: {
+        x: { ticks: { color: "#94a3b8", maxTicksLimit: 8 }, grid: { color: "#334155", drawBorder: false }, border: { display: false } },
+        y: { beginAtZero: true, ticks: { color: "#94a3b8", callback: (v) => v.toFixed(0) + " EGP" }, grid: { color: "#334155", drawBorder: false }, border: { display: false } },
+      },
+    },
+  });
 }
 
 // ── Global state ──────────────────────────────────────────────────────────────
 let currentData = [];
+let currentBills = [];
 let currentLang = "ar";
 let currentSummary = {};
 
@@ -341,8 +419,8 @@ const el = (id) => document.getElementById(id);
 
 function updateSummaryCards(summary) {
   if (el("total-usage"))    el("total-usage").textContent    = typeof summary.totalUsage === "number" ? summary.totalUsage.toString() : "--";
-  if (el("daily-avg"))      el("daily-avg").textContent      = summary.avgPerDay ? summary.avgPerDay.toFixed(1) : "--";
-  if (el("estimated-cost")) el("estimated-cost").textContent = summary.cost ? summary.cost.toFixed(0) : "--";
+  if (el("daily-avg"))      el("daily-avg").textContent      = typeof summary.avgPerDay === "number" ? summary.avgPerDay.toFixed(1) : "--";
+  if (el("estimated-cost")) el("estimated-cost").textContent = typeof summary.cost === "number" ? summary.cost.toFixed(0) : "--";
   if (el("billing-tier"))   el("billing-tier").textContent   = summary.tier || "--";
   if (summary.breakdown) {
     const bd = summary.breakdown;
@@ -414,8 +492,15 @@ langSwitchBtn.addEventListener("click", () => {
 // ── Quick actions ─────────────────────────────────────────────────────────────
 function refreshData() {
   showLoading();
-  if (currentLang === "ar") { contentAr.dataset.loaded = "false"; document.getElementById("terminal-ar").innerHTML = "> جاري تحميل بيانات استهلاك الكهرباء..."; loadArabicData(); }
-  else { contentEn.dataset.loaded = "false"; document.getElementById("terminal-en").innerHTML = "> Loading electricity usage data..."; loadEnglishData(); }
+  // Drop the cached snapshot so both views re-read data/dashboard.json.
+  loadDashboardData({ force: true }).catch(() => {});
+  if (currentLang === "ar") {
+    contentAr.dataset.loaded = "false";
+    loadArabicData();
+  } else {
+    contentEn.dataset.loaded = "false";
+    loadEnglishData();
+  }
 }
 
 function exportData() {
@@ -437,7 +522,9 @@ function closeModal(button) {
 function toggleFilters() { document.getElementById("search-input").focus(); }
 
 document.getElementById("chart-period")?.addEventListener("change", function () {
-  if (currentData.length > 0) displayRollingCostChartEn(currentData, parseInt(this.value));
+  if (currentData.length > 0) {
+    displayRollingCostChartEn(currentData, currentBills, parseInt(this.value));
+  }
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

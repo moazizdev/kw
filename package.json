@@ -1,0 +1,29 @@
+{
+  "name": "electricity-usage-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Electricity usage dashboard backed by Prisma Postgres and published as a static GitHub Pages site.",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "import": "tsx scripts/import-data.ts",
+    "sync": "tsx scripts/export-data.ts",
+    "build": "node scripts/build-static.mjs",
+    "dev": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "csv-parse": "7.0.3",
+    "dotenv": "18.0.9",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "prisma": "7.10.1",
+    "tsx": "4.23.15"
+  }
+}

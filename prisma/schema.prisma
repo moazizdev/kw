@@ -1,0 +1,43 @@
+// Prisma schema for the electricity usage dashboard.
+//
+// Two tables replace the two Google Sheets:
+//   readings  <- "Date time, Reading, Usage, __id"
+//   bills     <- "date, total_bill, __id"
+//
+// The `period` column on Bill is a YYYY-MM key. Making it unique means a
+// duplicated month in the source data collapses to one bill in the chart.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Reading {
+  id         Int      @id @default(autoincrement())
+  externalId String?  @unique @map("external_id")
+  recordedAt DateTime @unique @map("recorded_at")
+  reading    Float
+  usage      Float?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("readings")
+}
+
+model Bill {
+  id         Int      @id @default(autoincrement())
+  externalId String?  @unique @map("external_id")
+  period     String   @unique
+  billDate   DateTime @map("bill_date")
+  totalBill  Float    @map("total_bill")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([billDate])
+  @@map("bills")
+}
