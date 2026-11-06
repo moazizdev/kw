@@ -1,0 +1,12 @@
+name = "kw-api"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# The Worker needs one secret:
+#   DATABASE_URL - Prisma Postgres connection string
+#
+# The deploy workflow sets it from the GitHub Actions DATABASE_URL secret.
+
+[vars]
+ALLOWED_ORIGIN = "https://moazizdev.github.io,http://localhost:4173,http://127.0.0.1:4173"

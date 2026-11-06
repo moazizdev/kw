@@ -1,6 +1,40 @@
-// Static snapshot generated from Prisma Postgres by `npm run sync`
-// (and by the GitHub Actions workflow before each Pages deployment).
-const DATA_URL = "data/dashboard.json";
+// Live data comes from the optional Cloudflare Worker API. If it is not
+// configured (or is unavailable), fall back to the static snapshot generated
+// from Prisma Postgres by `npm run sync`.
+const STATIC_DATA_URL = "data/dashboard.json";
+
+function dashboardDataUrls() {
+  const apiBase = (window.KW_DASHBOARD_API || "").trim().replace(/\/+$/, "");
+  return apiBase
+    ? [`${apiBase}/api/dashboard`, STATIC_DATA_URL]
+    : [STATIC_DATA_URL];
+}
+
+async function fetchDashboardPayload() {
+  const urls = dashboardDataUrls();
+  let lastError = null;
+
+  for (let index = 0; index < urls.length; index += 1) {
+    const url = urls[index];
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} while loading ${url}`);
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (index < urls.length - 1) {
+        console.warn(
+          `Live dashboard API failed; falling back to ${urls[index + 1]}.`,
+          error,
+        );
+      }
+    }
+  }
+
+  throw lastError ?? new Error("No dashboard data source configured.");
+}
 
 let dashboardDataPromise = null;
 
@@ -18,13 +52,7 @@ async function loadDashboardData({ force = false } = {}) {
   if (force) dashboardDataPromise = null;
   if (dashboardDataPromise) return dashboardDataPromise;
 
-  dashboardDataPromise = fetch(DATA_URL, { cache: "no-store" })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} while loading ${DATA_URL}`);
-      }
-      return response.json();
-    })
+  dashboardDataPromise = fetchDashboardPayload()
     .then((payload) => {
       const readings = (payload.readings ?? [])
         .map((row) => ({
@@ -159,17 +187,19 @@ function logEn(line) { document.getElementById("terminal-en").textContent += "\n
 function displayAveragePerDayAr(data) {
   let tableHtml = "<table><thead><tr><th>#</th><th>التاريخ والوقت</th><th>القراءة</th><th>الفارق الزمني (ساعات)</th><th>المعدل اليومي (كيلوواط/ساعة)</th><th>التكلفة المقدرة</th></tr></thead><tbody>";
   const startIndex = Math.max(0, data.length - 21);
-  for (let i = startIndex; i < data.length - 1; i++) {
-    const row = data[i];
-    const nextRow = data[i + 1];
-    if (nextRow) {
-      const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60);
+  // Walk backwards so the newest reading appears first. Each row shows the
+  // reading at the end of the interval, with usage since the previous reading.
+  for (let i = data.length - 2; i >= startIndex; i--) {
+    const previousRow = data[i];
+    const row = data[i + 1];
+    if (row && previousRow) {
+      const hoursDiff = (row.timestamp - previousRow.timestamp) / (1000 * 60 * 60);
       const daysDiff = hoursDiff / 24;
-      const kWhUsage = nextRow.reading - row.reading;
+      const kWhUsage = row.reading - previousRow.reading;
       const avgPerDay = kWhUsage / daysDiff;
       const bd = calculateCostBreakdown(kWhUsage);
       tableHtml += `<tr>
-        <td>${i + 1}</td>
+        <td>${i + 2}</td>
         <td>${row.timestamp.toLocaleString("ar-EG", { timeZone: "UTC" })}</td>
         <td>${row.reading}</td>
         <td>${hoursDiff.toFixed(1)}</td>
@@ -186,17 +216,19 @@ function displayAveragePerDayAr(data) {
 function displayAveragePerDayEn(data) {
   let tableHtml = "<table><thead><tr><th>#</th><th>Date & Time</th><th>Reading</th><th>Time Diff (hrs)</th><th>Avg/Day (kWh)</th><th>Est. Bill</th></tr></thead><tbody>";
   const startIndex = Math.max(0, data.length - 21);
-  for (let i = startIndex; i < data.length - 1; i++) {
-    const row = data[i];
-    const nextRow = data[i + 1];
-    if (nextRow) {
-      const hoursDiff = (nextRow.timestamp - row.timestamp) / (1000 * 60 * 60);
+  // Walk backwards so the newest reading appears first. Each row shows the
+  // reading at the end of the interval, with usage since the previous reading.
+  for (let i = data.length - 2; i >= startIndex; i--) {
+    const previousRow = data[i];
+    const row = data[i + 1];
+    if (row && previousRow) {
+      const hoursDiff = (row.timestamp - previousRow.timestamp) / (1000 * 60 * 60);
       const daysDiff = hoursDiff / 24;
-      const kWhUsage = nextRow.reading - row.reading;
+      const kWhUsage = row.reading - previousRow.reading;
       const avgPerDay = kWhUsage / daysDiff;
       const bd = calculateCostBreakdown(kWhUsage);
       tableHtml += `<tr>
-        <td>${i + 1}</td>
+        <td>${i + 2}</td>
         <td>${row.timestamp.toLocaleString("en-US", { timeZone: "UTC" })}</td>
         <td>${row.reading}</td>
         <td>${hoursDiff.toFixed(1)}</td>

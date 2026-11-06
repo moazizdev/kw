@@ -5,6 +5,11 @@ dist/
 .env.*
 !.env.example
 
+# Wrangler local secrets and cache
+.dev.vars
+.dev.vars.*
+.wrangler/
+
 # OS / editor
 .DS_Store
 Thumbs.db

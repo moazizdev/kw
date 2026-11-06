@@ -26,6 +26,57 @@ It applies migrations, exports both tables, and deploys the snapshot. To
 refresh the live site after changing the database, run the workflow manually
 (**Actions → Deploy dashboard → Run workflow**) or wait for the schedule.
 
+## Optional: live data with a Cloudflare Worker
+
+The dashboard can read from Postgres on every page load through a small
+read-only Worker. The static JSON stays as a fallback.
+
+```text
+Browser → Cloudflare Worker /api/dashboard → Prisma Postgres
+```
+
+The Worker keeps `DATABASE_URL` server-side, allows the GitHub Pages origin
+with CORS, and only runs `SELECT` queries.
+
+### Deploy the Worker
+
+1. Add these repository secrets:
+   - `CLOUDFLARE_API_TOKEN` (the **Edit Cloudflare Workers** token template
+     works)
+   - `CLOUDFLARE_ACCOUNT_ID` (shown in the Cloudflare dashboard)
+   - `DATABASE_URL` (already required by the Pages workflow)
+2. Run **Actions → Deploy dashboard API → Run workflow**.
+3. Copy the Worker URL from the workflow output, for example
+   `https://kw-api.your-subdomain.workers.dev`.
+4. Add a repository variable:
+   **Settings → Secrets and variables → Actions → Variables → New repository
+   variable**
+   - Name: `KW_API_URL`
+   - Value: the Worker URL
+5. Re-run **Deploy dashboard** (or push to `main`) so the build writes the URL
+   into `dist/config.js`.
+
+The Worker endpoint is:
+
+```text
+GET /api/dashboard
+GET /api/health
+```
+
+If the Worker is unavailable, `scripts.js` automatically falls back to
+`data/dashboard.json`. To test live data locally, set
+`window.KW_DASHBOARD_API` in `config.js` to the Worker URL and run
+`npm run dev`.
+
+To run the Worker itself locally, create `worker/.dev.vars` with
+`DATABASE_URL=...` (it is ignored by git), then run:
+
+```bash
+cd worker
+npm install
+npm run dev
+```
+
 ## Local setup
 
 ### 1. Install dependencies
@@ -175,5 +226,11 @@ Add the repository secret described above. Secrets are not available to
 workflows triggered from forks.
 
 **I changed the database but the site did not update**
-The site is a snapshot. Run the workflow manually or wait for the 6-hour
-schedule.
+If `KW_API_URL` is configured, refresh the page; it queries the Worker live.
+Otherwise the site is a snapshot: run the workflow manually or wait for the
+6-hour schedule.
+
+**The live Worker request fails**
+Check that the Worker URL is correct, the Worker has the `DATABASE_URL` secret,
+and `ALLOWED_ORIGIN` in `worker/wrangler.toml` includes the dashboard origin.
+Until it is fixed, the dashboard falls back to `data/dashboard.json`.

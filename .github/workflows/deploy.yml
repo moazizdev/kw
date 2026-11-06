@@ -66,6 +66,8 @@ jobs:
         run: npm run sync
 
       - name: Build static site
+        env:
+          KW_API_URL: ${{ vars.KW_API_URL }}
         run: npm run build
 
       - name: Configure Pages
